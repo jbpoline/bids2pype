@@ -1,0 +1,58 @@
+{ "run_model": 
+  { "Name": "run_model", 
+    "Level": "Run",
+    "DependentVariable": "task-objectviewing",
+    "Columns": {
+      "face": {
+        "Variable": "trial_type",
+        "Level": "face",
+        "HRF": true
+      },
+      "scissors": {
+        "Variable": "trial_type",
+        "Level": "scissors",
+        "HRF": true
+      },
+      "cat": {
+        "Variable": "trial_type",
+        "Level": "cat",
+        "HRF": true
+      },
+      "house": {
+        "Variable": "trial_type",
+        "Level": "house",
+        "HRF": true
+      },
+      "scrambledpix": {
+        "Variable": "trial_type",
+        "Level": "scrambledpix",
+        "HRF": true
+      },
+      "bottle": {
+        "Variable": "trial_type",
+        "Level": "bottle",
+        "HRF": true
+      },
+      "chair": {
+        "Variable": "trial_type",
+        "Level": "chair",
+        "HRF": true
+      }
+    },
+    "Contrasts": {
+      "face_vs_house_contrast": {
+        "Columns": ["face", "house"],
+        "Weights": [1, -1]
+      }
+    }
+  },
+  "group_model": { 
+    "Level": "Group",
+    "DependentVariable": "face_vs_house_contrast",
+    "Columns": {
+      "group_mean": {
+        "Variable": "1"
+      }
+    }
+  }
+}
