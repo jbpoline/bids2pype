@@ -176,24 +176,40 @@ def get_run_conditions(datafile, model_dict):
     for elt in should_be_in_tsv_dict:
         assert elt in tsv_dict, "{} not in {}".format(elt, regressors)
 
-    list_regressors = []
+    dic_regressors = {} 
     for kreg in regressors:
+        dic_regressors[kreg] = {}
         regressor = regressors[kreg]
         assert 'Level' in regressor, "Level not in {}".format(regressor)
         trial_level = regressor['Level']
         dict_cond = {}
-        dict_cond['name'] = kreg 
+        #dict_cond['name'] = kreg 
         dict_cond['onset'] =  \
                 data_for_regressor(tsv_dict, 'onset', trial_level)
         dict_cond['duration'] =  \
                 data_for_regressor(tsv_dict, 'duration', trial_level)
         dict_cond['HRF'] = regressor['HRF']
-        list_regressors.append(dict_cond)
+        dic_regressors[kreg] = dict_cond
 
     condition_names = regressors.keys()
 
-    return condition_names, list_regressors 
+    return condition_names, dic_regressors 
 
 
+def get_nipype_run_info(datafile, model_dict, **kwargs):
+    """
+    returns what's needed by nipype: conditions, onsets, durations
+    """
+    
+    condition_names, dic_regressors = get_run_conditions(datafile, model_dict)
+
+    nipype_run_info = {}
+    nipype_run_info['condition_names'] = condition_names
+    nipype_run_info['onsets'] = [dic_regressors[cond]['onset'] for cond in condition_names]
+    nipype_run_info['durations'] = [dic_regressors[cond]['duration'] for cond in condition_names]
+    nipype_run_info['HRF'] = [dic_regressors[cond]['HRF'] for cond in condition_names]
+
+    return nipype_run_info    
+    
 
 
