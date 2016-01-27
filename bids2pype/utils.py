@@ -71,7 +71,6 @@ def get_json_model_Ydata(json_model, level='Run', verbose=VERB['none']):
     return returned_list 
 
 
-
 def get_runs_data(basedir, model_dic, verbose=VERB['none']):
     """
     search for the runs specified in model_dic in this base directory 
@@ -84,7 +83,6 @@ def get_runs_data(basedir, model_dic, verbose=VERB['none']):
     if verbose <= VERB['warn']: print(nii_to_search)
 
     return glob_recursive(basedir, nii_to_search)
-
 
 
 def glob_recursive(source_dir, pattern):
@@ -149,7 +147,13 @@ def data_for_regressor(tsv_dict, datatype, trial):
 
     return trial_data
 
-def get_run_conditions(datafile, model_dict):
+def _check_keys_in(keys, somewhere):
+    """
+    """
+    for elt in keys:
+        assert elt in somewhere, "{} not in {}".format(elt, somewhere)
+
+def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     """
     datafile: should be a .nii or .nii.gz data
     model_dict: the run level part of the model
@@ -171,45 +175,61 @@ def get_run_conditions(datafile, model_dict):
     tsv_dict = df.to_dict(orient='list')
 
     # get condition names:
+    # should trial_type be there if only one type of trial_type ?
+    _check_keys_in({'onset', 'duration', 'trial_type'}, tsv_dict)
+    _check_keys_in({'Columns'}, model_dict)
+    #
     regressors = model_dict['Columns']
-    should_be_in_tsv_dict = {'onset', 'duration', 'trial_type'}
-    for elt in should_be_in_tsv_dict:
-        assert elt in tsv_dict, "{} not in {}".format(elt, regressors)
-
     dic_regressors = {} 
     for kreg in regressors:
         dic_regressors[kreg] = {}
         regressor = regressors[kreg]
-        assert 'Level' in regressor, "Level not in {}".format(regressor)
-        trial_level = regressor['Level']
+        _check_keys_in({'Variable', 'HRFmodelling'}, regressor)
+
+        if verbose <= VERB['info']: 
+            print('\nregressor[Variable]: ', regressor['Variable'])
         dict_cond = {}
-        #dict_cond['name'] = kreg 
-        dict_cond['onset'] =  \
-                data_for_regressor(tsv_dict, 'onset', trial_level)
-        dict_cond['duration'] =  \
-                data_for_regressor(tsv_dict, 'duration', trial_level)
-        dict_cond['HRF'] = regressor['HRF']
+        # two cases so far : split by trial_type, or not. 
+        if regressor['Variable'] == 'trial_type':  
+            trial_level = regressor['Level']
+            #dict_cond['name'] = kreg 
+            dict_cond['onset'] =  \
+                    data_for_regressor(tsv_dict, 'onset', trial_level)
+            dict_cond['duration'] =  \
+                    data_for_regressor(tsv_dict, 'duration', trial_level)
+            dict_cond['magnitude'] = None 
+
+        # if not split by trial type, put values of the variable in 'magnitude'. 
+        else:
+            dict_cond['onset'] = tsv_dict['onset']
+            dict_cond['duration'] = tsv_dict['duration']
+            dict_cond['magnitude'] = tsv_dict[regressor['Variable']]
+        
+        if verbose <= VERB['info']: 
+            print('\ndict for this variable: ', dict_cond)
+        dict_cond['HRF'] = regressor['HRFmodelling']
         dic_regressors[kreg] = dict_cond
+        if verbose <= VERB['info']: 
+            print(kreg, dict_cond.keys())
 
     condition_names = regressors.keys()
 
     return condition_names, dic_regressors 
 
 
-def get_nipype_run_info(datafile, model_dict, **kwargs):
+def get_nipype_run_info(datafile, model_dict, verbose=VERB['none'], **kwargs):
     """
     returns what's needed by nipype: conditions, onsets, durations
     """
     
-    condition_names, dic_regressors = get_run_conditions(datafile, model_dict)
+    condition_names, dic_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
 
     nipype_run_info = {}
     nipype_run_info['condition_names'] = condition_names
     nipype_run_info['onsets'] = [dic_regressors[cond]['onset'] for cond in condition_names]
     nipype_run_info['durations'] = [dic_regressors[cond]['duration'] for cond in condition_names]
+    nipype_run_info['magnitude'] = [dic_regressors[cond]['magnitude'] for cond in condition_names]
     nipype_run_info['HRF'] = [dic_regressors[cond]['HRF'] for cond in condition_names]
 
     return nipype_run_info    
-    
-
 
