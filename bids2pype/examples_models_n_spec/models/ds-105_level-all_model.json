@@ -1,0 +1,58 @@
+{ "run_model": 
+  { "Name": "run_model", 
+    "Level": "Run",
+    "DependentVariable": "task-objectviewing",
+    "Columns": {
+      "face": {
+        "Variable": "trial_type",
+        "Level": "face",
+        "HRFmodelling": "Gamma"
+      },
+      "scissors": {
+        "Variable": "trial_type",
+        "Level": "scissors",
+        "HRFmodelling": "Gamma"
+      },
+      "cat": {
+        "Variable": "trial_type",
+        "Level": "cat",
+        "HRFmodelling": "Gamma"
+      },
+      "house": {
+        "Variable": "trial_type",
+        "Level": "house",
+        "HRFmodelling": "Gamma"
+      },
+      "scrambledpix": {
+        "Variable": "trial_type",
+        "Level": "scrambledpix",
+        "HRFmodelling": "Gamma"
+      },
+      "bottle": {
+        "Variable": "trial_type",
+        "Level": "bottle",
+        "HRFmodelling": "Gamma"
+      },
+      "chair": {
+        "Variable": "trial_type",
+        "Level": "chair",
+        "HRFmodelling": "Gamma"
+      }
+    },
+    "Contrasts": {
+      "face_vs_house_contrast": {
+        "Columns": ["face", "house"],
+        "Weights": [1, -1]
+      }
+    }
+  },
+  "group_model": { 
+    "Level": "Group",
+    "DependentVariable": "face_vs_house_contrast",
+    "Columns": {
+      "group_mean": {
+        "Variable": "1"
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "run_model": {
+    "Level": "Run",
+    "DependentVariable": "task-mixedgamblestask",
+    "Columns": {
+      "pos": {
+        "Variable": "gain",
+        "Level": "n/a",
+        "HRFmodelling": "Gamma"
+      },
+      "neg": {
+        "Variable": "loss",
+        "Level": "n/a",
+        "HRFmodelling": "Gamma"
+      }
+    },
+    "Contrasts": {
+      "pos_vs_neg_contrast": {
+        "Columns": ["pos", "neg"],
+        "Weights": [1, -1]
+      }
+    }
+  },
+  "group_model": {
+    "Level": "Group",
+    "DependentVariable": "pos_vs_neg_contrast",
+    "Columns": {
+      "group_mean": {
+        "Variable": "1"
+      }
+    },
+    "Contrasts": {
+      "pos_vs_neg_group": {
+        "Columns": ["group_mean"],
+        "Weights": [1]
+      }
+    }
+  }
+}
