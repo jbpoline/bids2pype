@@ -1,41 +1,42 @@
-{   "Name": "run_model", 
+{
+    "Name": "run_model", 
     "Level": "Run",
     "DependentVariable": "task-objectviewing",
     "Columns": {
       "face": {
         "Variable": "trial_type",
         "Level": "face",
-        "HRF": true
+        "HRFmodelling": "Gamma"
       },
       "scissors": {
         "Variable": "trial_type",
         "Level": "scissors",
-        "HRF": true
+        "HRFmodelling": "Gamma"
       },
       "cat": {
         "Variable": "trial_type",
         "Level": "cat",
-        "HRF": true
+        "HRFmodelling": "Gamma"
       },
       "house": {
         "Variable": "trial_type",
         "Level": "house",
-        "HRF": true
+        "HRFmodelling": "Gamma"
       },
       "scrambledpix": {
         "Variable": "trial_type",
         "Level": "scrambledpix",
-        "HRF": true
+        "HRFmodelling": "Gamma"
       },
       "bottle": {
         "Variable": "trial_type",
         "Level": "bottle",
-        "HRF": true
+        "HRFmodelling": "Gamma"
       },
       "chair": {
         "Variable": "trial_type",
         "Level": "chair",
-        "HRF": true
+        "HRFmodelling": "Gamma"
       }
     },
     "Contrasts": {
