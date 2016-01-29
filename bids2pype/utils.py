@@ -5,6 +5,7 @@ import json
 import fnmatch
 #import glob as gb
 #from six import string_types
+import numpy as np
 import pandas as pd
 
 
@@ -22,6 +23,29 @@ def get_prefix_suffix(level):
         nii_Y_suffix = '_run-*.nii.gz'
 
     return nii_Y_prefix, nii_Y_suffix
+
+
+def _get_json_dict_from_file(json_file):
+    """
+    """
+    assert osp.isfile(json_file), "{} is not a file".format(json_file)
+    try: 
+        with open(json_file) as fjson:
+            json_dic = json.load(fjson)
+    except: ValueError, " {} cannot be loaded by json module".format(json_file)
+
+    return json_dic
+
+
+def _get_json_dict_from_tsv_file(tsv_file):
+    """
+    """
+    assert osp.isfile(tsv_file), "{} is not a file ".format(tsv_file)
+    
+    df = pd.read_csv(tsv_file, index_col=False, sep='\t')
+    tsv_dict = df.to_dict(orient='list')
+
+    return tsv_dict
 
 def get_json_dict(json_model, level):
     """
@@ -153,6 +177,38 @@ def _check_keys_in(keys, somewhere):
     for elt in keys:
         assert elt in somewhere, "{} not in {}".format(elt, somewhere)
 
+
+def _get_tsv_lines(tsv_dict, column_name, trial):
+    """
+    This function takes a tsv dictionary, a column name, a trial type,
+    and returns the lines of the tsv for corresponding to trial for that column
+    """
+    assert column_name in tsv_dict,  \
+                "There is no {} in {}".format(column_name, tsv_dict.keys())
+
+    column_data = np.asarray(tsv_dict[column_name])
+    if trial == 'n/a':
+        col_bool =  np.ones(column_data.shape, dtype=bool)
+    else: 
+        col_bool = column_data == trial 
+
+    # for the moment, fails if no trial of that type 
+    assert np.any(col_bool), \
+            "{} column has no {}".format(column_name, trial)
+
+    return col_bool
+
+def _get_tsv_values(tsv_dict, column_name, col_bool):
+    """
+    """
+    assert column_name in tsv_dict,  \
+                "There is no {} in {}".format(column_name, tsv_dict.keys())
+    col_array = np.asarray(tsv_dict[column_name])
+    col_values = col_array[col_bool]
+    assert len(col_values) > 0, \
+            "no values for {}".format(column_name, tsv_dict.keys()) 
+    return list(col_values) 
+
 def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     """
     datafile: should be a .nii or .nii.gz data
@@ -169,10 +225,7 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
 
     # get tsv filename:
     tsv_file = datafile.split('_bold.nii')[0] + '_events.tsv'
-    assert osp.isfile(tsv_file), "{} is not a file ".format(tsv_file)
-    
-    df = pd.read_csv(tsv_file, index_col=False, sep='\t')
-    tsv_dict = df.to_dict(orient='list')
+    tsv_dict = _get_json_dict_from_tsv_file(tsv_file)
 
     # get condition names:
     # should trial_type be there if only one type of trial_type ?
@@ -180,56 +233,64 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     _check_keys_in({'Columns'}, model_dict)
     #
     regressors = model_dict['Columns']
-    dic_regressors = {} 
+    dict_regressors = {} 
     for kreg in regressors:
-        dic_regressors[kreg] = {}
+        dict_regressors[kreg] = {}
         regressor = regressors[kreg]
-        _check_keys_in({'Variable', 'HRFmodelling'}, regressor)
+        _check_keys_in({'Variable', 'HRFmodelling','Level'}, regressor)
 
         if verbose <= VERB['info']: 
             print('\nregressor[Variable]: ', regressor['Variable'])
-        dict_cond = {}
-        # two cases so far : split by trial_type, or not. 
-        if regressor['Variable'] == 'trial_type':  
-            trial_level = regressor['Level']
-            #dict_cond['name'] = kreg 
-            dict_cond['onset'] =  \
-                    data_for_regressor(tsv_dict, 'onset', trial_level)
-            dict_cond['duration'] =  \
-                    data_for_regressor(tsv_dict, 'duration', trial_level)
-            dict_cond['magnitude'] = None 
 
-        # if not split by trial type, put values of the variable in 'magnitude'. 
-        else:
-            dict_cond['onset'] = tsv_dict['onset']
-            dict_cond['duration'] = tsv_dict['duration']
-            dict_cond['magnitude'] = tsv_dict[regressor['Variable']]
-        
-        if verbose <= VERB['info']: 
-            print('\ndict for this variable: ', dict_cond)
+        dict_cond = {}
         dict_cond['HRF'] = regressor['HRFmodelling']
-        dic_regressors[kreg] = dict_cond
+
+        # First, get the columns through 'Variable' and 'Level':
+        trial_level = regressor['Level']
+        explanatory = regressor['Variable']
+        col_bool = _get_tsv_lines(tsv_dict, explanatory, trial_level)
+
+        # Second, get the values for these lines
+        _check_keys_in({'onset', 'duration'}, tsv_dict)
+        dict_cond['onset'] = _get_tsv_values(tsv_dict, 'onset', col_bool) 
+        dict_cond['duration'] = _get_tsv_values(tsv_dict, 'duration', col_bool) 
+
+        # Any parametric modulation ?
+        dict_cond['prm_modulation'] = None
+        if 'prm_modulation' in regressor:
+            dict_cond['prm_modulation'] = \
+                        _get_tsv_values(tsv_dict, regressor['prm_modulation'], col_bool) 
+
+        # Any temporal modulation ?
+        dict_cond['tmp_modulation'] = None
+        if 'tmp_modulation' in regressor:
+            dict_cond['tmp_modulation'] = regressor['tmp_modulation']
+        
+        dict_regressors[kreg] = dict_cond
         if verbose <= VERB['info']: 
             print(kreg, dict_cond.keys())
+            print('\ndict for this variable: ', dict_cond)
 
     condition_names = regressors.keys()
 
-    return condition_names, dic_regressors 
+    return condition_names, dict_regressors 
 
 
 def get_nipype_run_info(datafile, model_dict, verbose=VERB['none'], **kwargs):
     """
     returns what's needed by nipype: conditions, onsets, durations
     """
-    
-    condition_names, dic_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
+    condition_names, dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
 
     nipype_run_info = {}
     nipype_run_info['condition_names'] = condition_names
-    nipype_run_info['onsets'] = [dic_regressors[cond]['onset'] for cond in condition_names]
-    nipype_run_info['durations'] = [dic_regressors[cond]['duration'] for cond in condition_names]
-    nipype_run_info['magnitude'] = [dic_regressors[cond]['magnitude'] for cond in condition_names]
-    nipype_run_info['HRF'] = [dic_regressors[cond]['HRF'] for cond in condition_names]
+    nipype_run_info['onsets'] = [dict_regressors[cond]['onset'] for cond in condition_names]
+    nipype_run_info['durations'] = [dict_regressors[cond]['duration'] for cond in condition_names]
+    nipype_run_info['prm_modulation'] = \
+                [dict_regressors[cond]['prm_modulation'] for cond in condition_names]
+    nipype_run_info['tmp_modulation'] = \
+                [dict_regressors[cond]['tmp_modulation'] for cond in condition_names]
+    nipype_run_info['HRF'] = [dict_regressors[cond]['HRF'] for cond in condition_names]
 
     return nipype_run_info    
 
