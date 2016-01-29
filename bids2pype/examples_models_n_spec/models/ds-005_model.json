@@ -3,20 +3,28 @@
     "Level": "Run",
     "DependentVariable": "task-mixedgamblestask",
     "Columns": {
-      "pos": {
-        "Variable": "gain",
-        "Level": "n/a",
+      "dummy": {
+        "Variable": "respcat",
+        "Level": -1,
+        "prm_modulation": "RT",
         "HRFmodelling": "Gamma"
       },
-      "neg": {
-        "Variable": "loss",
-        "Level": "n/a",
+      "gain": {
+        "Variable": "respcat",
+        "Level": 0,
+        "prm_modulation": "RT",
+        "HRFmodelling": "Gamma"
+      },
+      "loss": {
+        "Variable": "respcat",
+        "Level": 1,
+        "prm_modulation": "RT",
         "HRFmodelling": "Gamma"
       }
     },
     "Contrasts": {
       "pos_vs_neg_contrast": {
-        "Columns": ["pos", "neg"],
+        "Columns": ["gain", "loss"],
         "Weights": [1, -1]
       }
     }
