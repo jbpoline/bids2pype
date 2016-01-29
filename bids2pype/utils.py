@@ -1,12 +1,14 @@
 from __future__ import print_function, division
 import os 
 import os.path as osp
+import shutil
 import json
 import fnmatch
 #import glob as gb
 #from six import string_types
 import numpy as np
 import pandas as pd
+from nipype.interfaces.base import Bunch
 
 
 VERB  = {'none':10, 'info':3, 'warn':2, 'bug':1, 'critical':0}
@@ -116,9 +118,9 @@ def glob_recursive(source_dir, pattern):
     assert osp.isdir(source_dir), \
             '{} does not seem to be a directory'.format(source_dir)
     matches = []
-    for root, dirnames, filenames in os.walk(source_dir):
+    for dirpath, dirnames, filenames in os.walk(source_dir):
         for filename in fnmatch.filter(filenames, pattern):
-            matches.append(os.path.join(root, filename))
+            matches.append(osp.join(dirpath, filename))
     return matches
 
 
@@ -256,31 +258,37 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
         dict_cond['duration'] = _get_tsv_values(tsv_dict, 'duration', col_bool) 
 
         # Any parametric modulation ?
-        dict_cond['prm_modulation'] = None
-        if 'prm_modulation' in regressor:
+        dict_cond['prm_modulation'] = False 
+        if 'ModulationVar' in regressor:
+
             dict_cond['prm_modulation'] = \
-                        _get_tsv_values(tsv_dict, regressor['prm_modulation'], col_bool) 
+                        _get_tsv_values(tsv_dict, regressor['ModulationVar'], col_bool) 
+            dict_cond['name_modulation'] = regressor['ModulationVar']
+            dict_cond['order_modulation'] = 1
+            if 'ModulationOrder' in regressor:
+                dict_cond['order_modulation'] = regressor['ModulationOrder']
 
         # Any temporal modulation ?
-        dict_cond['tmp_modulation'] = None
+        dict_cond['tmp_modulation'] = False
         if 'tmp_modulation' in regressor:
-            dict_cond['tmp_modulation'] = regressor['tmp_modulation']
+            dict_cond['tmp_modulation'] = regressor['ModulationTime']
         
         dict_regressors[kreg] = dict_cond
         if verbose <= VERB['info']: 
             print(kreg, dict_cond.keys())
             print('\ndict for this variable: ', dict_cond)
 
-    condition_names = regressors.keys()
+    #condition_names = regressors.keys()
 
-    return condition_names, dict_regressors 
+    return dict_regressors 
 
 
 def get_nipype_run_info(datafile, model_dict, verbose=VERB['none'], **kwargs):
     """
     returns what's needed by nipype: conditions, onsets, durations
     """
-    condition_names, dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
+    dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
+    condition_names = dict_regressors.keys()
 
     nipype_run_info = {}
     nipype_run_info['condition_names'] = condition_names
@@ -292,5 +300,77 @@ def get_nipype_run_info(datafile, model_dict, verbose=VERB['none'], **kwargs):
                 [dict_regressors[cond]['tmp_modulation'] for cond in condition_names]
     nipype_run_info['HRF'] = [dict_regressors[cond]['HRF'] for cond in condition_names]
 
-    return nipype_run_info    
+    return nipype_run_info
+
+
+def make_nipype_bunches(condition_names, dict_regressors, verbose=VERB['none']):
+    """
+    return inputs needed by nipype 
+    """
+
+    conditions = []
+    onsets = []
+    durations = []
+    pmod = []
+    for cond, kdic in zip(condition_names, dict_regressors):
+        dic = dict_regressors[kdic]
+        assert type(dic) == dict, "{} not a dict".format(dic)
+        if verbose <= VERB['info']:
+            print(cond, dic)
+        conditions.append(cond),
+        onsets.append(dic['onset'])
+        durations.append(dic['duration'])
+        if dic['prm_modulation']:
+            pmod_name = dic['name_modulation']
+            pmod_poly = dic['order_modulation']
+            pmod_param = dic['prm_modulation']
+            pmod.append([Bunch(name=pmod_name, poly=pmod_poly, param=pmod_param), None])
+        else:
+            pmod.append([])
+    
+    return Bunch(conditions=conditions, 
+                 onsets=onsets, 
+                 durations=durations, 
+                 pmod=pmod)
+
+def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
+    """
+    recursive walk in the source_dir
+    cp whatever is in pattern
+    otherwise touch
+    """
+    def _mkdir(_dir):
+        if not osp.isdir(_dir):
+            try:
+                os.makedirs(_dir)
+            except:
+                 print("cannot create directory {}".format(_dir))
+                 raise
+
+    def _touch(fname, times=None):
+        try:
+            with open(fname, 'a'):
+                os.utime(fname, times)
+        except:
+            print(fname)
+            raise
+
+    assert osp.isdir(source_dir), \
+            '{} does not seem to be a directory'.format(source_dir)
+
+    for  dirpath, dirnames, filenames in os.walk(source_dir):
+        newpath = dirpath.replace(source_dir, dest_dir)
+        _mkdir(dirpath)
+        for dirname in dirnames:
+            _mkdir(osp.join(newpath, dirname))
+        for _file in filenames:
+            for pattern in list_pattern:
+                # print(_file, pattern, fnmatch.filter([_file], pattern))
+                if _file in fnmatch.filter([_file], pattern):
+                    if verbose <= VERB['info']: print("copy ", _file)
+                    shutil.copy(osp.join(dirpath, _file), osp.join(newpath, _file))
+                    break
+                else:
+                    _touch(osp.join(newpath, _file))
+
 
