@@ -91,6 +91,10 @@ def get_json_model_Ydata(json_model, level='Run', verbose=VERB['none']):
     if level == 'Run':
         returned_list = get_runs_data(basedir_to_search, dict_level)
 
+    else:
+        print("Level {} not yet implemented".format(level))
+        raise NotImplementedError
+
 #    if level == 'Session':
 #        returned_list = get_sessions_data(basedir_to_search, dict_level)
         
@@ -102,7 +106,8 @@ def get_runs_data(basedir, model_dic, verbose=VERB['none']):
     search for the runs specified in model_dic in this base directory 
     """
     data_key = 'DependentVariable'
-    assert 'DependentVariable' in model_dic, "{} not in {}".format(data_key, model_dic)
+    assert 'DependentVariable' in model_dic, \
+                                "{} not in {}".format(data_key, model_dic)
 
     nii_Y_prefix, nii_Y_suffix = get_prefix_suffix('Run')
     nii_to_search = nii_Y_prefix + model_dic['DependentVariable'] + nii_Y_suffix
@@ -192,6 +197,7 @@ def _get_tsv_lines(tsv_dict, column_name, trial):
     This function takes a tsv dictionary, a column name, a trial type,
     and returns the lines of the tsv for corresponding to trial for that column
     """
+    message = ""
     assert column_name in tsv_dict,  \
                 "There is no {} in {}".format(column_name, tsv_dict.keys())
 
@@ -202,10 +208,11 @@ def _get_tsv_lines(tsv_dict, column_name, trial):
         col_bool = column_data == trial 
 
     # for the moment, fails if no trial of that type 
-    assert np.any(col_bool), \
-            "{} column has no {}".format(column_name, trial)
+    all_fine =  np.any(col_bool) 
+    if not all_fine:
+        message =  "\n{} column has no {}".format(column_name, trial)
 
-    return col_bool
+    return col_bool, message
 
 def _get_tsv_values(tsv_dict, column_name, col_bool):
     """
@@ -271,10 +278,16 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
         dict_cond = {}
         dict_cond['HRF'] = regressor['HRFmodelling']
 
-        # First, get the columns through 'Variable' and 'Level':
+        # First, get the lines through 'Variable' and 'Level':
         trial_level = regressor['Level']
         explanatory = regressor['Variable']
-        col_bool = _get_tsv_lines(tsv_dict, explanatory, trial_level)
+        col_bool, msg = _get_tsv_lines(tsv_dict, explanatory, trial_level)
+        if msg:
+            print(msg)
+            print('removing key {} for {}'.format(kreg, datafile))
+            # remove this regressor
+            dict_regressors.pop(kreg, None)
+            break
 
         # Second, get the values for these lines
         _check_keys_in({'onset', 'duration'}, tsv_dict)
@@ -306,25 +319,44 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
 
     return dict_regressors 
 
-
-def get_nipype_run_info(datafile, model_dict, verbose=VERB['none'], **kwargs):
+def get_run_contrasts(model_dict):
     """
-    returns what's needed by nipype: conditions, onsets, durations
     """
-    dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
-    condition_names = dict_regressors.keys()
+    _check_keys_in({'Contrasts'}, model_dict)
+    regressors = model_dict['Columns'] 
+    contrast_dict = model_dict['Contrasts']
+    dict_contrasts = {} 
+    for con_name,val in contrast_dict.iteritems():
+        dict_contrasts[con_name] = {}
+        contrast =  dict_contrasts[con_name]       
+        contrast['name'] = con_name
+        contrast['conditions'] = val['Columns'] 
+        assert set(contrast['conditions']).issubset(set(regressors.keys())), \
+                "{} not subset of {}".format(contrast['conditions'], regressors.keys())
+        contrast['Weights'] = val['Weights']
+        contrast['Statistic'] = 'T' 
 
-    nipype_run_info = {}
-    nipype_run_info['condition_names'] = condition_names
-    nipype_run_info['onsets'] = [dict_regressors[cond]['onset'] for cond in condition_names]
-    nipype_run_info['durations'] = [dict_regressors[cond]['duration'] for cond in condition_names]
-    nipype_run_info['prm_modulation'] = \
-                [dict_regressors[cond]['prm_modulation'] for cond in condition_names]
-    nipype_run_info['tmp_modulation'] = \
-                [dict_regressors[cond]['tmp_modulation'] for cond in condition_names]
-    nipype_run_info['HRF'] = [dict_regressors[cond]['HRF'] for cond in condition_names]
+    return dict_contrasts
 
-    return nipype_run_info
+
+# def get_nipype_run_info(datafile, model_dict, verbose=VERB['none'], **kwargs):
+#     """
+#     returns what's needed by nipype: conditions, onsets, durations
+#     """
+#     dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
+#     condition_names = dict_regressors.keys()
+# 
+#     nipype_run_info = {}
+#     nipype_run_info['condition_names'] = condition_names
+#     nipype_run_info['onsets'] = [dict_regressors[cond]['onset'] for cond in condition_names]
+#     nipype_run_info['durations'] = [dict_regressors[cond]['duration'] for cond in condition_names]
+#     nipype_run_info['prm_modulation'] = \
+#                 [dict_regressors[cond]['prm_modulation'] for cond in condition_names]
+#     nipype_run_info['tmp_modulation'] = \
+#                 [dict_regressors[cond]['tmp_modulation'] for cond in condition_names]
+#     nipype_run_info['HRF'] = [dict_regressors[cond]['HRF'] for cond in condition_names]
+# 
+#     return nipype_run_info
 
 
 def make_nipype_bunch(dict_regressors, verbose=VERB['none']):
@@ -369,6 +401,7 @@ def _get_substr_between(thestring, after, before):
     assert before in thestring, "{} not in {}".format(before , thestring)
     # get what's after
     whatisafter = thestring.split(after)[-1]
+    # get what's before
     between = whatisafter.split(before)[0] 
     return between
    
@@ -385,14 +418,40 @@ def _get_task_json_dict(base_dir, datafile):
     task_dict = _get_json_dict_from_file(task_parameter_files[0])
     return task_dict
 
+def _get_nipype_contrasts(model_dict):
+    """
+    """
+    contrasts_dict = get_run_contrasts(model_dict)
+    # format for nipype 
+    list_con = []
+    for con,val in contrasts_dict.iteritems():
+        this_con = (con, val['Statistic'], val['conditions'], val['Weights'])
+        list_con.append(this_con)
 
+    return list_con
 
 def _get_nipype_specify_model_inputs(base_dir, model_pattern, 
                                                level='Run', verbose=VERB['none']): 
     """
+    returns information ready for nipype specify_model:
+    
+    returns
+    -------
+    inputs_dict: dict 
+        dict keys are:
+        'time_repetition'
+        'input_units'
+        'high_pas_filter_cutoff'
+
+    bunches: list
+        list of Bunch object
+        These objects contain the onsets, duration, etc 
+
+    datafiles:
+        the list of nii.gz files (as many as bunches)
     """
 
-    assert level=='Run', "level not implemented"
+    assert level=='Run', "level {} not implemented".format(level)
 
     data_n_models = get_funcs_models(base_dir, model_pattern, level=level, verbose=verbose)
     datafiles = data_n_models.keys()
@@ -402,7 +461,7 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern,
     if  'HighPassFilterCutoff' in first_model:
         high_pass_filter_cutoff = first_model['HighPassFilterCutoff']
     else:
-        high_pass_filter_cutoff = 128
+        high_pass_filter_cutoff = 120
 
     # assumes for the moment task info is the same for all runs
     task_dict = _get_task_json_dict(base_dir, datafiles[0])
@@ -411,6 +470,9 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern,
     inputs_dict['time_repetition'] = task_dict['RepetitionTime']
     inputs_dict['input_units'] = 'secs'
     inputs_dict['high_pass_filter_cutoff'] = high_pass_filter_cutoff
+
+    # assumes contrasts all the same for all runs
+
     
     # create a list of bunches, one per datafile
     bunches = []
