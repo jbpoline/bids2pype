@@ -124,12 +124,25 @@ def glob_recursive(source_dir, pattern):
     return matches
 
 
+def _rglob_sorted_by_depth(base_dir, pattern):
+    """
+    recursively find files with pattern in base_dir
+    return a list of files found, from root to leaf 
+    """
+    def sort_by_dir_len(x):
+        return(len(osp.dirname(x)))
+    
+    filenames = glob_recursive(base_dir, pattern)
+    # return the list of directory by order of most root to most leaf
+
+    return sorted(filenames, key=sort_by_dir_len)
+
+
 def get_funcs_models(base_dir, model_pattern, level='Run', verbose=VERB['none']):
     """
     This function creates the link between a given nii or nii.gz
-    file and the model that should be apply to it at the run level
+    filename and the model that should be apply to it at the run level
     
-
     parameters:
     -----------
     base_dir: string
@@ -143,13 +156,7 @@ def get_funcs_models(base_dir, model_pattern, level='Run', verbose=VERB['none'])
         Contains the link between nii files to be processed (keys)
         and their model
     """
-    def sort_by_dir_len(x):
-        return(len(osp.dirname(x)))
-    
-    all_jsons = glob_recursive(base_dir, model_pattern)
-    # return the list of directory by order of most root to most leaf
-    all_jsons_sorted = sorted(all_jsons, key=sort_by_dir_len)
-
+    all_jsons_sorted = _rglob_sorted_by_depth(base_dir, model_pattern)
     current_dict = {}
     for json_model in all_jsons_sorted:
         list_of_data = get_json_model_Ydata(json_model, level=level, verbose=verbose)
@@ -211,6 +218,23 @@ def _get_tsv_values(tsv_dict, column_name, col_bool):
             "no values for {}".format(column_name, tsv_dict.keys()) 
     return list(col_values) 
 
+
+def _get_event_file_for_run(datafile):
+    """
+    input: 
+    ------
+    datafile: string
+        a *_bold.nii.gz file
+    output: 
+    -------
+    string
+        corresponding filename
+    """
+    tsv_file = datafile.split('_bold.nii')[0] + '_events.tsv'
+    assert osp.isfile(tsv_file), "{} is not a file ".format(tsv_file)
+    return tsv_file
+
+
 def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     """
     datafile: should be a .nii or .nii.gz data
@@ -226,7 +250,7 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     assert osp.isfile(datafile), "{} is not a file".format(datafile)
 
     # get tsv filename:
-    tsv_file = datafile.split('_bold.nii')[0] + '_events.tsv'
+    tsv_file = _get_event_file_for_run(datafile)
     tsv_dict = _get_json_dict_from_tsv_file(tsv_file)
 
     # get condition names:
@@ -303,15 +327,18 @@ def get_nipype_run_info(datafile, model_dict, verbose=VERB['none'], **kwargs):
     return nipype_run_info
 
 
-def make_nipype_bunches(condition_names, dict_regressors, verbose=VERB['none']):
+def make_nipype_bunch(dict_regressors, verbose=VERB['none']):
     """
-    return inputs needed by nipype 
+    return a Bunch : the nipype input  
     """
 
     conditions = []
     onsets = []
     durations = []
     pmod = []
+
+    condition_names = dict_regressors.keys()
+
     for cond, kdic in zip(condition_names, dict_regressors):
         dic = dict_regressors[kdic]
         assert type(dic) == dict, "{} not a dict".format(dic)
@@ -332,6 +359,75 @@ def make_nipype_bunches(condition_names, dict_regressors, verbose=VERB['none']):
                  onsets=onsets, 
                  durations=durations, 
                  pmod=pmod)
+
+
+def _get_substr_between(thestring, after, before):
+    """
+    """
+    # check that after and before are in thestring
+    assert after in thestring, "{} not in {}".format(after, thestring)
+    assert before in thestring, "{} not in {}".format(before , thestring)
+    # get what's after
+    whatisafter = thestring.split(after)[-1]
+    between = whatisafter.split(before)[0] 
+    return between
+   
+
+def _get_task_json_dict(base_dir, datafile):
+    """
+    get the task-???_bold.json dictionary corresponding to the datafile  
+    """
+    # get the task-X _bold.json
+    taskname = _get_substr_between(datafile, 'task-', '_')
+    task_parameter_files = _rglob_sorted_by_depth(base_dir, '*'+taskname+'_bold.json')   
+    assert len(task_parameter_files) == 1, \
+            "found  {},  len > 1 not implemented".format(task_parameter_files)
+    task_dict = _get_json_dict_from_file(task_parameter_files[0])
+    return task_dict
+
+
+
+def _get_nipype_specify_model_inputs(base_dir, model_pattern, 
+                                               level='Run', verbose=VERB['none']): 
+    """
+    """
+
+    assert level=='Run', "level not implemented"
+
+    data_n_models = get_funcs_models(base_dir, model_pattern, level=level, verbose=verbose)
+    datafiles = data_n_models.keys()
+
+    # assumes for the moment high pass filter must be the same for all runs
+    first_model = data_n_models[datafiles[0]]
+    if  'HighPassFilterCutoff' in first_model:
+        high_pass_filter_cutoff = first_model['HighPassFilterCutoff']
+    else:
+        high_pass_filter_cutoff = 128
+
+    # assumes for the moment task info is the same for all runs
+    task_dict = _get_task_json_dict(base_dir, datafiles[0])
+
+    inputs_dict={}
+    inputs_dict['time_repetition'] = task_dict['RepetitionTime']
+    inputs_dict['input_units'] = 'secs'
+    inputs_dict['high_pass_filter_cutoff'] = high_pass_filter_cutoff
+    
+    # create a list of bunches, one per datafile
+    bunches = []
+    for datafile, model_dict in data_n_models.iteritems():
+        #task_dict = _get_task_json_dict(base_dir, datafile)
+        dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
+        bunches.append(make_nipype_bunch(dict_regressors, verbose=verbose))
+         
+    return inputs_dict, bunches, datafiles
+
+# specify_model = pe.Node(interface=model.SpecifyModel(), name="specify_model")
+# specify_model.inputs.input_units             = 'secs'
+# specify_model.inputs.time_repetition         = 3.
+# specify_model.inputs.high_pass_filter_cutoff = 120
+# specify_model.inputs.subject_info = 
+
+
 
 def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
     """
