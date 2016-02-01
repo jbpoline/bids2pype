@@ -6,37 +6,37 @@
       "face": {
         "Variable": "trial_type",
         "Level": "face",
-        "HRFmodelling": "Gamma"
+        "HRFModelling": "Gamma"
       },
       "scissors": {
         "Variable": "trial_type",
         "Level": "scissors",
-        "HRFmodelling": "Gamma"
+        "HRFModelling": "Gamma"
       },
       "cat": {
         "Variable": "trial_type",
         "Level": "cat",
-        "HRFmodelling": "Gamma"
+        "HRFModelling": "Gamma"
       },
       "house": {
         "Variable": "trial_type",
         "Level": "house",
-        "HRFmodelling": "Gamma"
+        "HRFModelling": "Gamma"
       },
       "scrambledpix": {
         "Variable": "trial_type",
         "Level": "scrambledpix",
-        "HRFmodelling": "Gamma"
+        "HRFModelling": "Gamma"
       },
       "bottle": {
         "Variable": "trial_type",
         "Level": "bottle",
-        "HRFmodelling": "Gamma"
+        "HRFModelling": "Gamma"
       },
       "chair": {
         "Variable": "trial_type",
         "Level": "chair",
-        "HRFmodelling": "Gamma"
+        "HRFModelling": "Gamma"
       }
     },
     "Contrasts": {
