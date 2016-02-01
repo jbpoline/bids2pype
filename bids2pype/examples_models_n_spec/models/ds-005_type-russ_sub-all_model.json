@@ -1,0 +1,72 @@
+{
+  "run_model": {
+    "Level": "Run",
+    "DependentVariable": "task-mixedgamblestask",
+    "HighPassFilterCutoff": 80,
+    "Columns": {
+      "task": {
+        "Variable": "trial_type",
+        "Level": "n/a",
+        "HRFModelling": "Gamma"
+      },
+      "param-gain": {
+        "Variable": "trial_type",
+        "Level": "n/a",
+        "ModulationVar": "gain",
+        "Demean": true,
+        "ModulationOrder": 1,
+        "HRFModelling": "Gamma+derivs"
+      },
+      "param-loss": {
+        "Variable": "trial_type",
+        "Level": "n/a",
+        "ModulationVar": "loss",
+        "Demean": true,
+        "HRFModelling": "Gamma+derivs"
+      },
+      "param-rt": {
+        "Variable": "trial_type",
+        "Level": "n/a",
+        "ModulationVar": "RT",
+        "Demean": true,
+        "HRFModelling": "Gamma+derivs"
+      }
+
+    },
+    "Contrasts": {
+      "task>Baseline": {
+        "Columns": ["task"],
+        "Statistic": "T",
+        "Weights": [1]
+      },
+      "param-gain": {
+        "Columns": ["param-gain"],
+        "Statistic": "T",
+        "Weights": [1]
+      },
+      "param-loss-neg": {
+        "Columns": ["param-loss"],
+        "Statistic": "T",
+        "Weights": [-1]
+      }
+    },
+    "Error": {
+      "SerialCorrelations": true
+    }
+  },
+  "group_model": {
+    "Level": "Group",
+    "DependentVariable": "pos_vs_neg_contrast",
+    "Columns": {
+      "group_mean": {
+        "Variable": "1"
+      }
+    },
+    "Contrasts": {
+      "pos_vs_neg_group": {
+        "Columns": ["group_mean"],
+        "Weights": [1]
+      }
+    }
+  }
+}
