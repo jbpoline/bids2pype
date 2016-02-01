@@ -12,19 +12,15 @@ from nipype.interfaces.base import Bunch
 
 
 VERB  = {'none':10, 'info':3, 'warn':2, 'bug':1, 'critical':0}
+
 LEVELS = {'Run', 'Session', 'Subject', 'Group'}
 LEVELSJSON = {  'Run':'run_model', 'Session':'ses_model', 
                 'Subject':'sub_model', 'Group':'group_model'}
 
-def get_prefix_suffix(level):
-    """
-    """
-    assert level in LEVELS, "{} not a model level".format(level)
-    if level == 'Run':
-        nii_Y_prefix = 'sub-*'
-        nii_Y_suffix = '_run-*.nii.gz'
-
-    return nii_Y_prefix, nii_Y_suffix
+REGKEYS = ['Variable', 'Level', 'HRFModelling', 'ModulationOrder', 'ModulationVar', 'Demean']
+RUNMODKEYS = ['Level', 'DependentVariable', 'Columns', 'Error', 
+              'Contrasts', 'HighPassFilterCutoff']
+CONKEYS = ['Column', 'Statistic',  'Weights']
 
 
 def _get_json_dict_from_file(json_file):
@@ -51,7 +47,7 @@ def _get_json_dict_from_tsv_file(tsv_file):
 
 def get_json_dict(json_model, level):
     """
-    get the dict corresponding to this level
+    get the dict corresponding to this level from the json model file
     """
 
     try: 
@@ -101,6 +97,16 @@ def get_json_model_Ydata(json_model, level='Run', verbose=VERB['none']):
     return returned_list 
 
 
+def get_prefix_suffix(level):
+    """
+    """
+    assert level in LEVELS, "{} not a model level".format(level)
+    if level == 'Run':
+        nii_Y_prefix = 'sub-*'
+        nii_Y_suffix = '_run-*.nii.gz'
+
+    return nii_Y_prefix, nii_Y_suffix
+
 def get_runs_data(basedir, model_dic, verbose=VERB['none']):
     """
     search for the runs specified in model_dic in this base directory 
@@ -114,6 +120,13 @@ def get_runs_data(basedir, model_dic, verbose=VERB['none']):
     if verbose <= VERB['warn']: print(nii_to_search)
 
     return glob_recursive(basedir, nii_to_search)
+
+
+def _possible_dirpath_for_Ydata(dirname):
+    """
+    return True if this path can contain data
+    """
+    return True
 
 
 def glob_recursive(source_dir, pattern):
@@ -165,9 +178,12 @@ def get_funcs_models(base_dir, model_pattern, level='Run', verbose=VERB['none'])
     current_dict = {}
     for json_model in all_jsons_sorted:
         list_of_data = get_json_model_Ydata(json_model, level=level, verbose=verbose)
+        # this at the moment may return unwanted data : too liberal
         dict_level = get_json_dict(json_model, level)
         for data in list_of_data:
-            current_dict[data] = dict_level
+            # only associate data and model for data which have an event file:
+            if _get_event_file_for_run(data): 
+                current_dict[data] = dict_level
     
     return current_dict
 
@@ -226,6 +242,9 @@ def _get_tsv_values(tsv_dict, column_name, col_bool):
     return list(col_values) 
 
 
+def _run_has_event_file(datafile):
+    pass
+
 def _get_event_file_for_run(datafile):
     """
     input: 
@@ -238,8 +257,10 @@ def _get_event_file_for_run(datafile):
         corresponding filename
     """
     tsv_file = datafile.split('_bold.nii')[0] + '_events.tsv'
-    assert osp.isfile(tsv_file), "{} is not a file ".format(tsv_file)
-    return tsv_file
+    if osp.isfile(tsv_file): #, "{} is not a file ".format(tsv_file):
+        return tsv_file
+    else:
+        return ''
 
 
 def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
@@ -258,6 +279,9 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
 
     # get tsv filename:
     tsv_file = _get_event_file_for_run(datafile)
+    if not tsv_file:
+        print("no tsv_file for {}".format(datafile))
+        raise
     tsv_dict = _get_json_dict_from_tsv_file(tsv_file)
 
     # get condition names:
@@ -270,13 +294,13 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     for kreg in regressors:
         dict_regressors[kreg] = {}
         regressor = regressors[kreg]
-        _check_keys_in({'Variable', 'HRFmodelling','Level'}, regressor)
+        _check_keys_in({'Variable', 'HRFModelling','Level'}, regressor)
 
         if verbose <= VERB['info']: 
             print('\nregressor[Variable]: ', regressor['Variable'])
 
         dict_cond = {}
-        dict_cond['HRF'] = regressor['HRFmodelling']
+        dict_cond['HRF'] = regressor['HRFModelling']
 
         # First, get the lines through 'Variable' and 'Level':
         trial_level = regressor['Level']
@@ -412,9 +436,14 @@ def _get_task_json_dict(base_dir, datafile):
     """
     # get the task-X _bold.json
     taskname = _get_substr_between(datafile, 'task-', '_')
-    task_parameter_files = _rglob_sorted_by_depth(base_dir, '*'+taskname+'_bold.json')   
+    # task_parameter_files = _rglob_sorted_by_depth(base_dir, '*'+taskname+'_bold.json')   
+    # in the future: we might have a task-something lower in the hierarchy that
+    # should replace the top level one
+    # here problematic when files ._* exist
+    task_parameter_files = _rglob_sorted_by_depth(base_dir, 'task-'+taskname+'_bold.json')   
     assert len(task_parameter_files) == 1, \
-            "found  {},  len > 1 not implemented".format(task_parameter_files)
+            "found  {},  len > 1 not implemented, taskname {} basedir {} ".format(
+                    task_parameter_files, taskname, base_dir)
     task_dict = _get_json_dict_from_file(task_parameter_files[0])
     return task_dict
 
@@ -434,6 +463,7 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern,
                                                level='Run', verbose=VERB['none']): 
     """
     returns information ready for nipype specify_model:
+    ATTENTION : THIS RETURNS THE PMOD STYLE - ONLY FOR SPM
     
     returns
     -------
