@@ -7,7 +7,8 @@
       "task": {
         "Variable": "trial_type",
         "Level": "n/a",
-        "HRFModelling": "Gamma"
+        "HRFModelling": "Gamma",
+        "duration": 1.3932149481304148
       },
       "param-gain": {
         "Variable": "trial_type",
@@ -15,21 +16,26 @@
         "ModulationVar": "gain",
         "Demean": true,
         "ModulationOrder": 1,
-        "HRFModelling": "Gamma+derivs"
+        "HRFModelling": "Gamma+derivs",
+        "duration": 1.3932149481304148
+
       },
       "param-loss": {
         "Variable": "trial_type",
         "Level": "n/a",
         "ModulationVar": "loss",
         "Demean": true,
-        "HRFModelling": "Gamma+derivs"
+        "HRFModelling": "Gamma+derivs",
+        "duration": 1.3932149481304148
+
       },
       "param-rt": {
         "Variable": "trial_type",
         "Level": "n/a",
         "ModulationVar": "RT",
         "Demean": true,
-        "HRFModelling": "Gamma+derivs"
+        "HRFModelling": "Gamma+derivs",
+        "duration": 1.3932149481304148
       }
 
     },
