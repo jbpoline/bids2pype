@@ -22,6 +22,8 @@ RUNMODKEYS = ['Level', 'DependentVariable', 'Columns', 'Error',
               'Contrasts', 'HighPassFilterCutoff']
 CONKEYS = ['Column', 'Statistic',  'Weights']
 
+DEFAULTS_PAR = {'order_modulation': 1, 'high_pass_filter_cutoff': 120}
+
 
 def _get_json_dict_from_file(json_file):
     """
@@ -156,7 +158,7 @@ def _rglob_sorted_by_depth(base_dir, pattern):
     return sorted(filenames, key=sort_by_dir_len)
 
 
-def get_funcs_models(base_dir, model_pattern, level='Run', verbose=VERB['none']):
+def associate_model_data(base_dir, model_pattern, level='Run', verbose=VERB['none']):
     """
     This function creates the link between a given nii or nii.gz
     filename and the model that should be apply to it at the run level
@@ -271,7 +273,13 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     returns conditions_names, and a list of 
     dictionaries (one per condition/trial) containing
     onsets, duration, HRF, ... for this model
+
+    
     """
+
+    # proper logging for latter ...
+    logging = {}
+
    
     # for runs, the datafile is just a filename
     # check data exist ?
@@ -291,13 +299,17 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
     #
     regressors = model_dict['Columns']
     dict_regressors = {} 
+
     for kreg in regressors:
+        logging[kreg] = {}
+        logging[kreg]['is_well'] = True 
+        logging[kreg]['msg'] = '' 
         dict_regressors[kreg] = {}
         regressor = regressors[kreg]
         _check_keys_in({'Variable', 'HRFModelling','Level'}, regressor)
 
         if verbose <= VERB['info']: 
-            print('\nregressor[Variable]: ', regressor['Variable'])
+            print('\nRegress :', kreg, 'regressor[Variable]: ', regressor['Variable'])
 
         dict_cond = {}
         dict_cond['HRF'] = regressor['HRFModelling']
@@ -305,29 +317,42 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
         # First, get the lines through 'Variable' and 'Level':
         trial_level = regressor['Level']
         explanatory = regressor['Variable']
-        col_bool, msg = _get_tsv_lines(tsv_dict, explanatory, trial_level)
-        if msg:
-            print(msg)
-            print('removing key {} for {}'.format(kreg, datafile))
-            # remove this regressor
+        col_bool, nothing_there = _get_tsv_lines(tsv_dict, explanatory, trial_level)
+        if nothing_there:
+            msg =  nothing_there + ' ! \n' + 'Removing key {} for {}'.format(kreg, datafile)
+            # remove this regressor in the returned dictionary
             dict_regressors.pop(kreg, None)
-            break
+            if verbose <= VERB['info']: 
+                print(msg)
+            logging[kreg]['msg'] = msg
+            logging[kreg]['is_well'] = False
+            continue # skip that kreg
 
         # Second, get the values for these lines
         _check_keys_in({'onset', 'duration'}, tsv_dict)
         dict_cond['onset'] = _get_tsv_values(tsv_dict, 'onset', col_bool) 
-        dict_cond['duration'] = _get_tsv_values(tsv_dict, 'duration', col_bool) 
+        # if there is a "duration" key in the model for this regressor, take it and
+        # overide values in tsv file
+        if "duration" in regressor:
+            the_duration = regressor['duration']
+            dict_cond['duration'] = list((np.ones(col_bool.shape)*the_duration)[col_bool])
+        else:
+            dict_cond['duration'] = _get_tsv_values(tsv_dict, 'duration', col_bool) 
 
         # Any parametric modulation ?
-        dict_cond['prm_modulation'] = False 
         if 'ModulationVar' in regressor:
-
             dict_cond['prm_modulation'] = \
                         _get_tsv_values(tsv_dict, regressor['ModulationVar'], col_bool) 
             dict_cond['name_modulation'] = regressor['ModulationVar']
-            dict_cond['order_modulation'] = 1
+            dict_cond['order_modulation'] = DEFAULTS_PAR['order_modulation']
             if 'ModulationOrder' in regressor:
                 dict_cond['order_modulation'] = regressor['ModulationOrder']
+        #no parametric modulation
+        else:
+            dict_cond['prm_modulation'] =  list(np.ones(col_bool.shape)[col_bool])
+            dict_cond['name_modulation'] = None
+            dict_cond['order_modulation'] = None
+
 
         # Any temporal modulation ?
         dict_cond['tmp_modulation'] = False
@@ -336,12 +361,12 @@ def get_run_conditions(datafile, model_dict, verbose=VERB['none']):
         
         dict_regressors[kreg] = dict_cond
         if verbose <= VERB['info']: 
-            print(kreg, dict_cond.keys())
-            print('\ndict for this variable: ', dict_cond)
+            print( "\n keys for regressor ", kreg, " are: ", dict_cond.keys())
+            print('\n dict for regressor: ', dict_cond)
 
     #condition_names = regressors.keys()
 
-    return dict_regressors 
+    return dict_regressors, logging
 
 def get_run_contrasts(model_dict):
     """
@@ -351,14 +376,17 @@ def get_run_contrasts(model_dict):
     contrast_dict = model_dict['Contrasts']
     dict_contrasts = {} 
     for con_name,val in contrast_dict.iteritems():
-        dict_contrasts[con_name] = {}
-        contrast =  dict_contrasts[con_name]       
+        # fill contrast dict
+        contrast =  {}
         contrast['name'] = con_name
         contrast['conditions'] = val['Columns'] 
         assert set(contrast['conditions']).issubset(set(regressors.keys())), \
                 "{} not subset of {}".format(contrast['conditions'], regressors.keys())
         contrast['Weights'] = val['Weights']
         contrast['Statistic'] = 'T' 
+
+        #- add to dict_contrasts
+        dict_contrasts[con_name] = contrast
 
     return dict_contrasts
 
@@ -383,14 +411,19 @@ def get_run_contrasts(model_dict):
 #     return nipype_run_info
 
 
-def make_nipype_bunch(dict_regressors, verbose=VERB['none']):
+def make_nipype_bunch(dict_regressors, bunch_type='spm', verbose=VERB['none']):
     """
     return a Bunch : the nipype input  
+    so far : the spm bunch with pmod and tmod
     """
+
+    # does it make sense to create a bunch from empty regressors ?
+    assert dict_regressors, "dict_regressors input is empty: {}".format(dict_regressors)
 
     conditions = []
     onsets = []
     durations = []
+    amplitudes = []
     pmod = []
 
     condition_names = dict_regressors.keys()
@@ -403,19 +436,39 @@ def make_nipype_bunch(dict_regressors, verbose=VERB['none']):
         conditions.append(cond),
         onsets.append(dic['onset'])
         durations.append(dic['duration'])
-        if dic['prm_modulation']:
-            pmod_name = dic['name_modulation']
-            pmod_poly = dic['order_modulation']
-            pmod_param = dic['prm_modulation']
-            pmod.append([Bunch(name=pmod_name, poly=pmod_poly, param=pmod_param), None])
-        else:
-            pmod.append([])
-    
-    return Bunch(conditions=conditions, 
-                 onsets=onsets, 
-                 durations=durations, 
-                 pmod=pmod)
 
+        #----- spm type of bunches ------#
+        if bunch_type == 'spm':
+            if dic['name_modulation']:
+                pmod_name = dic['name_modulation']
+                pmod_poly = dic['order_modulation']
+                pmod_param = dic['prm_modulation']
+                pmod.append([Bunch(name=pmod_name, 
+                                   poly=pmod_poly, 
+                                   param=pmod_param), None])
+            else:
+                pmod.append([])
+        #----- fsl type of bunches ------#
+        elif bunch_type == 'fsl':
+            # here the parametric modulation values encodes the 
+            # 'weights' or 'amplitudes'
+            amplitudes.append(dic['prm_modulation'])
+        else:
+            print("unknown bunch type {}".format(bunch_type))
+            raise
+
+
+    if bunch_type == 'spm': 
+        return Bunch(conditions=conditions, 
+                     onsets=onsets, 
+                     durations=durations, 
+                     pmod=pmod)
+    elif bunch_type == 'fsl':
+        return Bunch(conditions=conditions, 
+                     onsets=onsets, 
+                     durations=durations,
+                     amplitudes=amplitudes
+                     )
 
 def _get_substr_between(thestring, after, before):
     """
@@ -433,6 +486,7 @@ def _get_substr_between(thestring, after, before):
 def _get_task_json_dict(base_dir, datafile):
     """
     get the task-???_bold.json dictionary corresponding to the datafile  
+    These contain repetition time and task name
     """
     # get the task-X _bold.json
     taskname = _get_substr_between(datafile, 'task-', '_')
@@ -459,11 +513,19 @@ def _get_nipype_contrasts(model_dict):
 
     return list_con
 
-def _get_nipype_specify_model_inputs(base_dir, model_pattern, 
+def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm', 
                                                level='Run', verbose=VERB['none']): 
     """
     returns information ready for nipype specify_model:
-    ATTENTION : THIS RETURNS THE PMOD STYLE - ONLY FOR SPM
+    For spm: returns pmod style of bunch 
+
+    parameters:
+    -----------
+    base_dir: string
+    model_pattern: string
+        a glob would give you the models
+    bunch_type: string
+        one of {'spm', 'fsl'}
     
     returns
     -------
@@ -475,7 +537,9 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern,
 
     bunches: list
         list of Bunch object
-        These objects contain the onsets, duration, etc 
+        These objects contain the onsets, duration, 
+                                    fsl: amplitudes, 
+                                    spm: pmod / tmod Bunches  
 
     datafiles:
         the list of nii.gz files (as many as bunches)
@@ -483,15 +547,17 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern,
 
     assert level=='Run', "level {} not implemented".format(level)
 
-    data_n_models = get_funcs_models(base_dir, model_pattern, level=level, verbose=verbose)
+    data_n_models = associate_model_data(base_dir, model_pattern, level=level, verbose=verbose)
     datafiles = data_n_models.keys()
+
+    #------ params supposed to be unique across models: take the first one ---#
 
     # assumes for the moment high pass filter must be the same for all runs
     first_model = data_n_models[datafiles[0]]
     if  'HighPassFilterCutoff' in first_model:
         high_pass_filter_cutoff = first_model['HighPassFilterCutoff']
     else:
-        high_pass_filter_cutoff = 120
+        high_pass_filter_cutoff = DEFAULTS_PAR['high_pass_filter_cutoff']
 
     # assumes for the moment task info is the same for all runs
     task_dict = _get_task_json_dict(base_dir, datafiles[0])
@@ -503,14 +569,18 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern,
 
     # assumes contrasts all the same for all runs
 
-    
+
     # create a list of bunches, one per datafile
     bunches = []
     for datafile, model_dict in data_n_models.iteritems():
         #task_dict = _get_task_json_dict(base_dir, datafile)
-        dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
-        bunches.append(make_nipype_bunch(dict_regressors, verbose=verbose))
-         
+        dict_regressors, _log = get_run_conditions(datafile, model_dict, verbose=verbose)
+        if verbose <= VERB['info']:
+            cond_with_issues = [k for k in _log if not _log[k]['is_well']]
+            print('issue with keys {}'.format(cond_with_issues))
+        bunches.append(make_nipype_bunch(dict_regressors, 
+                                         bunch_type=bunch_type, verbose=verbose))
+
     return inputs_dict, bunches, datafiles
 
 # specify_model = pe.Node(interface=model.SpecifyModel(), name="specify_model")
@@ -518,7 +588,6 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern,
 # specify_model.inputs.time_repetition         = 3.
 # specify_model.inputs.high_pass_filter_cutoff = 120
 # specify_model.inputs.subject_info = 
-
 
 
 def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
@@ -560,5 +629,43 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
                     break
                 else:
                     _touch(osp.join(newpath, _file))
+
+
+""" Notes ---- 
+
+1- associate data and model.
+    - find most top level model (or just one model)
+    - instanciate default model_dict
+    - get list of data
+        * for runs, get the nii.gz
+        * for ses, sub, grp : 
+            find all ses, sub, or grp directories, create a unique key for each
+            for each, find data as list of files
+            associate key and list of files
+    - once list of data is found, with a top level model, for each of these element go up
+        the directory tree and update the model if necessary
+
+    ASSOCIATION OF DATA AND MODEL SHOULD BE COMPLEMENTED BY state_dict{'run','ses','sub','grp'}
+
+2. Once data and model are associated:
+    - Create an internal data structure to represent the model
+        this would be one object per set of data
+        To be implementated
+        -----------------------------
+            - demean
+            - get movement parameter regressors
+            - 
+
+3. Take this internal data structure and export it in spm / fsl like type of nipype inputs
+
+
+Outstanding question for Satra/Chris
+-------------------------------------
+    - seems that pmod structure has only 1 element even when there are 2 runs (2 onsets, etc)
+    - the model specification that is generic to both contains specific spm
+
+"""
+
+
 
 
