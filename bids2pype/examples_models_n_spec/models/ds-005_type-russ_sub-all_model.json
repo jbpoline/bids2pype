@@ -36,6 +36,13 @@
         "Demean": true,
         "HRFModelling": "Gamma+derivs",
         "duration": 1.3932149481304148
+      },
+      "motion-param": {
+        "FileSelector": {
+          "pattern": "derivatives/mcflirt/par/_runcode_{0[run]:1d}/_subject_id_sub-{0[sub]}/sub-{0[sub]}_task-mixedgamblestask_run-{0[run]}_bold_mcf.nii.gz.par",
+          "EntitiesKeys": {"run":"run", "subject":"sub"}
+        },
+        "Regressors": ["all", "deriv1"]
       }
 
     },
