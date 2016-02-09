@@ -496,6 +496,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             # Second, get the values for these lines
             _check_keys_in({'onset', 'duration'}, tsv_dict)
             dict_cond['onset'] = _get_tsv_values(tsv_dict, 'onset', col_bool) 
+
             # if there is a "duration" key in the model for this regressor,
             # take it and overide values in tsv file
             if "duration" in regressor:
@@ -506,20 +507,24 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
                 dict_cond['duration'] = \
                                 _get_tsv_values(tsv_dict, 'duration', col_bool) 
 
-            # Any parametric modulation ?
+            # Any parametric modulation ? 'prm_modulation' corresponds to the 'weight'
             if 'ModulationVar' in regressor:
-                dict_cond['prm_modulation'] = \
-                      _get_tsv_values(tsv_dict, regressor['ModulationVar'], col_bool) 
+                weights = _get_tsv_values(tsv_dict, regressor['ModulationVar'], col_bool)
+                if 'Demean' in regressor:
+                    weights = np.asarray(weights).astype(float)
+                    weights -= weights.mean()
+
+                dict_cond['prm_modulation'] = list(weights)
                 dict_cond['name_modulation'] = regressor['ModulationVar']
                 dict_cond['order_modulation'] = DEFAULTS_PAR['order_modulation']
                 if 'ModulationOrder' in regressor:
                     dict_cond['order_modulation'] = regressor['ModulationOrder']
+                    
             #no parametric modulation
             else:
                 dict_cond['prm_modulation'] =  list(np.ones(col_bool.shape)[col_bool])
                 dict_cond['name_modulation'] = None
                 dict_cond['order_modulation'] = None
-
 
             # Any temporal modulation ?
             dict_cond['tmp_modulation'] = False
