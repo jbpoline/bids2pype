@@ -328,30 +328,53 @@ def _get_other_reg_file_name(base_dir, datafile, pattern):
 
 def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
     """
+    from a file that contains columns of values, construct an "other regressor"
+
+    parameters:
+    -----------
+    file_name: string
+    regressor: dict
+        the dict contained in the json model file
+        should have keys:
+            "FileSelector" : how to get the file
+            "Regressors" : which columns are we taking from this file 
+
+    returns: 
+    --------
+    dict_regressors: dict
+        keys: names of the other regressors
+        values: {'group', 'values'}
+                'group': indicate the name of the original set of regressors
+                         coming from the same file
+                'values': the values of the regressor, as many as volume in the
+                          data to be analyzed
     """
     #print(file_name)
     dict_regressors = {} 
     #- create file name from pattern and variables
-    pattern = regressor['FileSelector']['pattern']
+    # pattern = regressor['FileSelector']['pattern']
     assert osp.isfile(file_name)
 
     #- check that the file exists
     if not file_name:
-        print("{} not a file for pattern {} ".format(file_name, pattern))
+        print("{} not a file, regressor: {} ".format(file_name, regressor))
         raise
     assert osp.isfile(file_name)
+
     if verbose <= VERB['info']: 
-        print("file {} file for pattern {} ".format(file_name, pattern))
-    # read it
+        print("_get_other_regressors: file_name {}, regressor: {}".format(
+                                                        file_name, regressor))
+    # Read this file, account for one column file
     motpars=np.loadtxt(file_name)
     if motpars.ndim == 1:
         nb_lines, nb_col  = 1, motpars.shape[0]
     elif motpars.ndim == 2:
         nb_lines, nb_col = motpars.shape
     else:
-        print(" array from {} does not seem to be well".format(file_name))
+        print(" array from {} does not seem to be well, motpars.shape".format(
+                                                      file_name, motpars.shape))
         raise
-    # print("nb_col, nb_lines", nb_col, nb_lines)
+    # debug:print("nb_col, nb_lines", nb_col, nb_lines)
 
     # what do we do with it:
     assert "Regressors" in regressor
@@ -360,12 +383,11 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
     # get the columns indices
     if "all" in to_add:
         idx = range(nb_col)
-    else:
+    else: # to be polished: how do we specify columns
         assert 'columns' in to_add[0]
         idx = to_add[0]['columns']
 
     #print("idx :" , idx)
-        # TO DO : check and see if this is at all useful
     for i in idx:
         name = kreg+"_{:02d}".format(i+1)
         dict_regressors[name] = {}
@@ -390,7 +412,16 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     dictionaries (one per condition/trial) containing
     onsets, duration, HRF, ... for this model
 
-    
+    returns
+    -------
+    dict_regressors: dict
+        keys are the name of the regressors, 
+        values are dict containing onsets, duration, HRFModelling, etc
+    dict_other_regressors: dict
+        keys are name of other regressors (not to be convolved)
+        values are dict with 'values', and possibly other information 
+    logging:
+
     """
 
     # proper logging for latter ...
@@ -545,10 +576,11 @@ def make_nipype_bunch(dict_regressors, other_reg,
     amplitudes = []
     pmod = []
 
-    condition_names = dict_regressors.keys()
+    # condition_names = dict_regressors.keys()
+    # mend the order of things condition names 
 
-    for cond, kdic in zip(condition_names, dict_regressors):
-        dic = dict_regressors[kdic]
+    for cond, dic in dict_regressors.items(): #zip(condition_names, dict_regressors):
+        # dic = dict_regressors[cond]
         assert type(dic) == dict, "{} not a dict".format(dic)
         if verbose <= VERB['info']:
             print("\nmake_nipype_bunch cond : ",  cond, "dic : ", dic)
