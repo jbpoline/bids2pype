@@ -107,6 +107,8 @@ def get_prefix_suffix(level):
     if level == 'Run':
         nii_Y_prefix = 'sub-*'
         nii_Y_suffix = '_run-*.nii.gz'
+    else:
+        raise NotImplementedError, " Level {} not implemented".format(level)
 
     return nii_Y_prefix, nii_Y_suffix
 
@@ -185,7 +187,7 @@ def associate_model_data(base_dir, model_pattern, level='Run', verbose=VERB['non
         dict_level = get_json_dict(json_model, level)
         for data in list_of_data:
             # only associate data and model for data which have an event file:
-            if _get_event_file_for_run(data): 
+            if _get_event_filename_for_run(data): 
                 current_dict[data] = dict_level
     
     return {'data_dict':current_dict, 'base_dir':base_dir}
@@ -248,7 +250,7 @@ def _get_tsv_values(tsv_dict, column_name, col_bool):
 def _run_has_event_file(datafile):
     pass
 
-def _get_event_file_for_run(datafile):
+def _get_event_filename_for_run(datafile):
     """
     input: 
     ------
@@ -432,7 +434,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     assert osp.isfile(datafile), "{} is not a file".format(datafile)
 
     # get tsv filename:
-    tsv_file = _get_event_file_for_run(datafile)
+    tsv_file = _get_event_filename_for_run(datafile)
     if not tsv_file:
         print("no tsv_file for {}".format(datafile))
         raise
@@ -460,9 +462,9 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             pattern = regressor['FileSelector']['pattern']
             file_name = _get_other_reg_file_name(base_dir, datafile, pattern)
             # print("the file_name: ", file_name)
-            these_regressors = _get_other_regressors(file_name, regressor, kreg, 
+            other_regressors = _get_other_regressors(file_name, regressor, kreg, 
                                                                 verbose=verbose)
-            dict_other_regressors.update(these_regressors)
+            dict_other_regressors.update(other_regressors)
             # remove this kreg from dict_regressors
             dict_regressors.pop(kreg, None)
            
@@ -519,7 +521,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
                 dict_cond['order_modulation'] = DEFAULTS_PAR['order_modulation']
                 if 'ModulationOrder' in regressor:
                     dict_cond['order_modulation'] = regressor['ModulationOrder']
-                    
+
             #no parametric modulation
             else:
                 dict_cond['prm_modulation'] =  list(np.ones(col_bool.shape)[col_bool])
@@ -536,26 +538,37 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
                 print( "\n keys for regressor ", kreg, " are: ", dict_cond.keys())
                 print('\n dict for regressor: ', dict_cond)
 
-    #condition_names = regressors.keys()
-
     return dict_regressors, dict_other_regressors, logging
+
 
 def get_run_contrasts(model_dict):
     """
+    parameters
+    ----------
+    model_dict: dict
+        see description in ...
+
+    returns
+    -------
+    dict_contrasts: dict
+        a dict containing all necessary information for the contrasts to be exported
     """
+
     _check_keys_in({'Contrasts'}, model_dict)
     regressors = model_dict['Columns'] 
     contrast_dict = model_dict['Contrasts']
     dict_contrasts = {} 
+
     for con_name,val in contrast_dict.iteritems():
         # fill contrast dict
         contrast =  {}
         contrast['name'] = con_name
         contrast['conditions'] = val['Columns'] 
+        # check contrast conditions are in regressors
         assert set(contrast['conditions']).issubset(set(regressors.keys())), \
                 "{} not subset of {}".format(contrast['conditions'], regressors.keys())
         contrast['Weights'] = val['Weights']
-        contrast['Statistic'] = 'T' 
+        contrast['Statistic'] = val['Statistic'] 
 
         #- add to dict_contrasts
         dict_contrasts[con_name] = contrast
@@ -563,12 +576,17 @@ def get_run_contrasts(model_dict):
     return dict_contrasts
 
 
+#------------------------------------------------------------------------------#
+#-----------------------  Export functions to nipype from here ----------------#
+#------------------------------------------------------------------------------#
+
+
 
 
 def make_nipype_bunch(dict_regressors, other_reg, 
                                        bunch_type='spm', verbose=VERB['none']):
     """
-    return a Bunch : the nipype input  
+    return a Bunch : the nipype input for model specification  
     so far : the spm bunch with pmod and tmod
     """
 
@@ -665,14 +683,24 @@ def _get_task_json_dict(base_dir, datafile):
     # should replace the top level one
     # here problematic when files ._* exist
     task_parameter_files = _rglob_sorted_by_depth(base_dir, 'task-'+taskname+'_bold.json')   
-    assert len(task_parameter_files) == 1, \
-            "found  {},  len > 1 not implemented, taskname {} basedir {} ".format(
+    
+    # should be only one file:
+    if len(task_parameter_files) != 1:
+        raise NotImplementedError, \
+            "found  {},  len != 1 not implemented, taskname {} basedir {} ".format(
                     task_parameter_files, taskname, base_dir)
+
     task_dict = _get_json_dict_from_file(task_parameter_files[0])
+
     return task_dict
 
 def _get_nipype_contrasts(model_dict):
     """
+
+    Parameters
+    ----------
+    model_dict: dict
+        The dict corresponding to the json model file
     """
     contrasts_dict = get_run_contrasts(model_dict)
     # format for nipype 
@@ -704,15 +732,14 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
         'time_repetition'
         'input_units'
         'high_pas_filter_cutoff'
-
     bunches: list
         list of Bunch object
         These objects contain the onsets, duration, 
                                     fsl: amplitudes, 
                                     spm: pmod / tmod Bunches  
-
     datafiles:
         the list of nii.gz files (as many as bunches)
+
     """
 
     assert level=='Run', "level {} not implemented".format(level)
@@ -739,9 +766,6 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
     inputs_dict['input_units'] = 'secs'
     inputs_dict['high_pass_filter_cutoff'] = high_pass_filter_cutoff
 
-    # assumes contrasts all the same for all runs
-
-
     # create a list of bunches, one per datafile
     bunches = []
     for datafile, model_dict in data_n_models.iteritems():
@@ -767,9 +791,18 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
 
 def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
     """
-    recursive walk in the source_dir
-    cp whatever is in pattern
+    recursive walk in the source_dir: cp whatever is in pattern
     otherwise touch
+
+    parameters:
+    -----------
+    source_dir: string
+        the directory to be "copied"
+    dest_dir: string
+        where it is copied
+    list_pattern: list
+        will only actually copy these patterns (strings)
+    
     """
     def _mkdir(_dir):
         if not osp.isdir(_dir):
@@ -817,7 +850,7 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
             find all ses, sub, or grp directories, create a unique key for each
             for each, find data as list of files
             associate key and list of files
-    - once list of data is found, with a top level model, for each of these element go up
+    - once list of data is found, with a top level model, for each of these element go down 
         the directory tree and update the model if necessary
 
     ASSOCIATION OF DATA AND MODEL SHOULD BE COMPLEMENTED BY state_dict{'run','ses','sub','grp'}
@@ -827,8 +860,8 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
         this would be one object per set of data
         To be implementated
         -----------------------------
-            - demean
-            - get movement parameter regressors
+            X demean 
+            X get movement parameter regressors 
             - 
 
 3. Take this internal data structure and export it in spm / fsl like type of nipype inputs
@@ -837,7 +870,7 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
 Outstanding question for Satra/Chris
 -------------------------------------
     - seems that pmod structure has only 1 element even when there are 2 runs (2 onsets, etc)
-    - the model specification that is generic to both contains specific spm
+    - the model specification that is generic to both contains specific spm stuff ?
 
 """
 
