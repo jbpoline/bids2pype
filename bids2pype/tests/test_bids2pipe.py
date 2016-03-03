@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 from .. import utils
+import numpy as np
 import os 
 import os.path as osp
 import json
@@ -14,11 +15,13 @@ test_case_105b = {
     'model_pattern': "ds-105_level-all_model.json"
 }
 test_case_005 = {
-    'base_dir': '/home/jb/data/bids/ds005',
+    #'base_dir': '/home/jb/data/bids/ds005',
+    'base_dir': './data/ds005',
     'model_pattern': "*_model.json"
 }
 test_case_005r = {
-    'base_dir': '/home/jb/data/bids/ds005',
+    #'base_dir': '/home/jb/data/bids/ds005',
+    'base_dir': 'data/ds005',
     'model_pattern': "ds-005_type-russ*_model.json"
 }
 
@@ -28,7 +31,6 @@ test_case = test_case_005r
 #test_case = test_case_105b
 
 base_dir, model_pattern = test_case['base_dir'], test_case['model_pattern']
-
 
 def test_associate_model_data():
     """
@@ -90,6 +92,7 @@ def test_associate_model_data():
                                                       verbose=utils.VERB['none'])
 
     data_dict = assos_model_data['data_dict']
+    #print(data_dict)
     datafile0 = sorted(data_dict.keys())[0]
     read_from_disk  = data_dict[datafile0]
     
@@ -103,7 +106,29 @@ def test_associate_model_data():
 
     exp_contrasts = expected['Contrasts'].keys()
     read_contrasts = data_dict[datafile0]['Contrasts'].keys()
-
     assert set(exp_contrasts) == set(read_contrasts)
+   
+
+def test_get_nipype_specify_model_inputs(): 
+
+    specifymodel_inputs, bunches, data = \
+        utils._get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='fsl', 
+                                                                     verbose=utils.VERB['none'])
+
+    sorted_bunch = [b for (d,b) in sorted(zip(data, bunches))]
+    sorted_data = sorted(data)
+
+    expected_data0 = base_dir + '/sub-01/func/sub-01_task-mixedgamblestask_run-01_bold.nii.gz'
+    print(expected_data0)
+    assert expected_data0 == sorted_data[0]
     
+    exp_param_gain = np.loadtxt('./test_cond_amplitude.txt').astype(float)
+    exp_param_gain -= exp_param_gain.mean()
+    index_gain = sorted_bunch[0].conditions.index('param-gain')
+    read_param_gain = np.asarray(sorted_bunch[0].amplitudes[index_gain])
+    #print(read_param_gain, exp_param_gain)
+    assert np.linalg.norm(read_param_gain - exp_param_gain) < 1.e-12
+    
+def test__get_dict_from_tsv_file():
+    pass
 
