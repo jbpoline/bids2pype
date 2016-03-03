@@ -38,7 +38,7 @@ def _get_json_dict_from_file(json_file):
     return json_dic
 
 
-def _get_json_dict_from_tsv_file(tsv_file):
+def _get_dict_from_tsv_file(tsv_file):
     """
     """
     assert osp.isfile(tsv_file), "{} is not a file ".format(tsv_file)
@@ -438,7 +438,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     if not tsv_file:
         print("no tsv_file for {}".format(datafile))
         raise
-    tsv_dict = _get_json_dict_from_tsv_file(tsv_file)
+    tsv_dict = _get_dict_from_tsv_file(tsv_file)
 
     # get condition names:
     # should trial_type be there if only one type of trial_type ?
