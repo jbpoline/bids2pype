@@ -335,11 +335,14 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
     parameters:
     -----------
     file_name: string
+        file that contains the other regressors to be included in the model
     regressor: dict
-        the dict contained in the json model file
+        the dict described in the json model file
         should have keys:
             "FileSelector" : how to get the file
             "Regressors" : which columns are we taking from this file 
+    kreg: string
+        the regressor key (name), eg: motion-param
 
     returns: 
     --------
@@ -398,8 +401,8 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
         if "deriv1" in to_add:
             deriv_name = kreg+"_{:02d}_deriv1".format(i+1)
             dict_regressors[deriv_name] = {}
-            td=np.zeros(motpars.shape[0])
-            td[1:]=motpars[1:,i] -motpars[:-1,i]
+            td = np.zeros(motpars.shape[0])
+            td[1:] = motpars[1:,i] - motpars[:-1,i]
             dict_regressors[deriv_name]['values'] = td 
 
     return dict_regressors
@@ -657,6 +660,12 @@ def make_nipype_bunch(dict_regressors, other_reg,
 
 def _get_substr_between(thestring, after, before, check=True):
     """
+    find things that are after after and before before :)
+    example: 
+
+    >>> _get_substr_between('++aaa_the_good_stuff_bbb++', 'aaa', 'bbb')
+    '_the_good_stuff_'
+
     """
     # check that after and before are in thestring
     if check:
