@@ -501,8 +501,8 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
 
             # if there is a "duration" key in the model for this regressor,
             # take it and overide values in tsv file
-            if "duration" in regressor:
-                the_duration = regressor['duration']
+            if "Duration" in regressor:
+                the_duration = regressor['Duration']
                 dict_cond['duration'] = \
                                 list((np.ones(col_bool.shape)*the_duration)[col_bool])
             else:

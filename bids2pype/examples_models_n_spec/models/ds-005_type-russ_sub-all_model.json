@@ -8,7 +8,7 @@
         "Variable": "trial_type",
         "Level": "n/a",
         "HRFModelling": "Gamma",
-        "duration": 1.3932149481304148
+        "Duration": 1.3932149481304148
       },
       "param-gain": {
         "Variable": "trial_type",
@@ -17,7 +17,7 @@
         "Demean": true,
         "ModulationOrder": 1,
         "HRFModelling": "Gamma+derivs",
-        "duration": 1.3932149481304148
+        "Duration": 1.3932149481304148
 
       },
       "param-loss": {
@@ -26,7 +26,7 @@
         "ModulationVar": "loss",
         "Demean": true,
         "HRFModelling": "Gamma+derivs",
-        "duration": 1.3932149481304148
+        "Duration": 1.3932149481304148
 
       },
       "param-rt": {
@@ -35,7 +35,7 @@
         "ModulationVar": "RT",
         "Demean": true,
         "HRFModelling": "Gamma+derivs",
-        "duration": 1.3932149481304148
+        "Duration": 1.3932149481304148
       },
       "motion-param": {
         "FileSelector": {
