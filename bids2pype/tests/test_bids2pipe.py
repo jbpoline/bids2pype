@@ -132,3 +132,51 @@ def test_get_nipype_specify_model_inputs():
 def test__get_dict_from_tsv_file():
     pass
 
+
+def test_get_other_regressors():
+    """
+    
+    specifymodel_inputs, bunches, data = \
+        utils._get_nipype_specify_model_inputs(base_dir, model_pattern, 
+                                bunch_type='fsl', verbose=utils.VERB['none'])
+
+    """
+
+    specifymodel_inputs, bunches, data = \
+        utils._get_nipype_specify_model_inputs(base_dir, model_pattern, \
+                                bunch_type='fsl', verbose=utils.VERB['none'])
+
+    # sort both bunch and data to get predictable output
+    sorted_bunch = [b for (d,b) in sorted(zip(data, bunches))]
+    sorted_data = sorted(data)
+
+    assert sorted_data[0] == base_dir + \
+                '/sub-01/func/sub-01_task-mixedgamblestask_run-01_bold.nii.gz'
+    assert sorted_data[2] == base_dir + \
+                '/sub-01/func/sub-01_task-mixedgamblestask_run-03_bold.nii.gz'
+    assert sorted_data[-1] == base_dir + \
+                '/sub-16/func/sub-16_task-mixedgamblestask_run-03_bold.nii.gz'
+    assert sorted_bunch[0].regressor_names[0] == "motion-param_01"
+    assert sorted_bunch[0].regressor_names[1] == "motion-param_02"
+
+    # read file corresponding to the first sub run mvt param:
+    mvt = np.loadtxt(base_dir + \
+        '/derivatives/mcflirt/par/_runcode_1/'+\
+        '_subject_id_sub-01/sub-01_task-mixedgamblestask_run-01_bold_mcf.nii.gz.par')
+
+    for col_idx, col_mvt in enumerate(mvt.T): 
+        assert np.linalg.norm(col_mvt - sorted_bunch[0].regressors[col_idx]) < 1.e-12
+
+
+    # read file corresponding to sub 01 run 03 mvt param:
+    mvt_file = base_dir + \
+        '/derivatives/mcflirt/par/_runcode_3/'+\
+        '_subject_id_sub-01/sub-01_task-mixedgamblestask_run-03_bold_mcf.nii.gz.par'
+    print(mvt_file)
+    mvt = np.loadtxt(mvt_file) 
+
+
+    for col_idx, col_mvt in enumerate(mvt.T): 
+        assert np.linalg.norm(col_mvt - sorted_bunch[2].regressors[col_idx]) < 1.e-12
+
+

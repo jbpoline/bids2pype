@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+import collections
 import os 
 import os.path as osp
 import shutil
@@ -355,7 +356,7 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
                           data to be analyzed
     """
     #print(file_name)
-    dict_regressors = {} 
+    dict_regressors = collections.OrderedDict() 
     #- create file name from pattern and variables
     # pattern = regressor['FileSelector']['pattern']
     assert osp.isfile(file_name)
@@ -381,29 +382,35 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
         raise
     # debug:print("nb_col, nb_lines", nb_col, nb_lines)
 
+    all_col_indices = range(nb_col)
+
     # what do we do with it:
     assert "Regressors" in regressor
     to_add = regressor["Regressors"] # should be ["all", "deriv1"]
-  
+
+    # if to_add empty, for the moment raise
+    if not to_add: 
+        print("to_add empty, for the moment raise")
+
+    # possible values
+    assert set(to_add).issubset({'all', 'deriv1'}), "{}".format(set(to_add))
+      
     # get the columns indices
     if "all" in to_add:
-        idx = range(nb_col)
-    else: # to be polished: how do we specify columns
-        assert 'columns' in to_add[0]
-        idx = to_add[0]['columns']
+        col_names = [kreg+"_{:02d}".format(i+1) for i in all_col_indices]
+        for i, name in enumerate(col_names):
+            dict_regressors[name] = {} 
+            dict_regressors[name]['values'] =  motpars[:,i]
+            dict_regressors[name]['group'] = kreg 
 
-    #print("idx :" , idx)
-    for i in idx:
-        name = kreg+"_{:02d}".format(i+1)
-        dict_regressors[name] = {}
-        dict_regressors[name]['values'] =  motpars[:,i]
-        dict_regressors[name]['group'] = kreg 
-        if "deriv1" in to_add:
-            deriv_name = kreg+"_{:02d}_deriv1".format(i+1)
-            dict_regressors[deriv_name] = {}
+    if "deriv1" in to_add: 
+        col_names = [kreg+"_{:02d}_deriv".format(i+1) for i in all_col_indices]
+        for i, name in enumerate(col_names):
+            dict_regressors[name] = {}
             td = np.zeros(motpars.shape[0])
             td[1:] = motpars[1:,i] - motpars[:-1,i]
-            dict_regressors[deriv_name]['values'] = td 
+            dict_regressors[name]['values'] = td 
+            dict_regressors[name]['group'] = kreg+"_deriv"
 
     return dict_regressors
 
@@ -450,40 +457,40 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     #
     regressors = model_dict['Columns']
     dict_regressors = {} 
-    dict_other_regressors = {} 
+    dict_other_regressors = collections.OrderedDict()
 
     for kreg in regressors:
         logging[kreg] = {}
         logging[kreg]['is_well'] = True 
         logging[kreg]['msg'] = '' 
+        this_regressor = regressors[kreg]
         dict_regressors[kreg] = {}
-        regressor = regressors[kreg]
 
         # other regressors if we have a FileSelector
-        if 'FileSelector' in regressor: 
-            _check_keys_in({'pattern'}, regressor['FileSelector'])
-            pattern = regressor['FileSelector']['pattern']
+        if 'FileSelector' in this_regressor: 
+            _check_keys_in({'pattern'}, this_regressor['FileSelector'])
+            pattern = this_regressor['FileSelector']['pattern']
             file_name = _get_other_reg_file_name(base_dir, datafile, pattern)
             # print("the file_name: ", file_name)
-            other_regressors = _get_other_regressors(file_name, regressor, kreg, 
-                                                                verbose=verbose)
+            other_regressors = _get_other_regressors(
+                                  file_name, this_regressor, kreg, verbose=verbose)
             dict_other_regressors.update(other_regressors)
             # remove this kreg from dict_regressors
             dict_regressors.pop(kreg, None)
            
         else: #- this is a standard onset type of regressor, will be HRF convolved
-            _check_keys_in({'Variable', 'HRFModelling','Level'}, regressor)
+            _check_keys_in({'Variable', 'HRFModelling','Level'}, this_regressor)
 
             if verbose <= VERB['info']: 
                 print('\nRegress :', kreg, 
                       'regressor[Variable]: ', regressor['Variable'])
 
             dict_cond = {}
-            dict_cond['HRF'] = regressor['HRFModelling']
+            dict_cond['HRF'] = this_regressor['HRFModelling']
 
             # First, get the lines through 'Variable' and 'Level':
-            trial_level = regressor['Level']
-            explanatory = regressor['Variable']
+            trial_level = this_regressor['Level']
+            explanatory = this_regressor['Variable']
             col_bool, nothing_there = _get_tsv_lines(tsv_dict, 
                                                      explanatory, trial_level)
 
@@ -504,37 +511,41 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
 
             # if there is a "duration" key in the model for this regressor,
             # take it and overide values in tsv file
-            if "Duration" in regressor:
-                the_duration = regressor['Duration']
+            if "Duration" in this_regressor:
+                the_duration = this_regressor['Duration']
                 dict_cond['duration'] = \
-                                list((np.ones(col_bool.shape)*the_duration)[col_bool])
+                           list((np.ones(col_bool.shape)*the_duration)[col_bool])
             else:
                 dict_cond['duration'] = \
                                 _get_tsv_values(tsv_dict, 'duration', col_bool) 
 
-            # Any parametric modulation ? 'prm_modulation' corresponds to the 'weight'
-            if 'ModulationVar' in regressor:
-                weights = _get_tsv_values(tsv_dict, regressor['ModulationVar'], col_bool)
-                if 'Demean' in regressor:
+            # Any parametric modulation ? 'prm_modulation' corresponds 
+            # to the 'weight'
+            if 'ModulationVar' in this_regressor:
+                weights = _get_tsv_values(tsv_dict, 
+                                this_regressor['ModulationVar'], col_bool)
+                if 'Demean' in this_regressor:
                     weights = np.asarray(weights).astype(float)
                     weights -= weights.mean()
 
                 dict_cond['prm_modulation'] = list(weights)
-                dict_cond['name_modulation'] = regressor['ModulationVar']
+                dict_cond['name_modulation'] = this_regressor['ModulationVar']
                 dict_cond['order_modulation'] = DEFAULTS_PAR['order_modulation']
-                if 'ModulationOrder' in regressor:
-                    dict_cond['order_modulation'] = regressor['ModulationOrder']
+                if 'ModulationOrder' in this_regressor:
+                    dict_cond['order_modulation'] = \
+                                                this_regressor['ModulationOrder']
 
             #no parametric modulation
             else:
-                dict_cond['prm_modulation'] =  list(np.ones(col_bool.shape)[col_bool])
+                dict_cond['prm_modulation'] = \
+                                        list(np.ones(col_bool.shape)[col_bool])
                 dict_cond['name_modulation'] = None
                 dict_cond['order_modulation'] = None
 
             # Any temporal modulation ?
             dict_cond['tmp_modulation'] = False
-            if 'tmp_modulation' in regressor:
-                dict_cond['tmp_modulation'] = regressor['ModulationTime']
+            if 'tmp_modulation' in this_regressor:
+                dict_cond['tmp_modulation'] = this_regressor['ModulationTime']
             
             dict_regressors[kreg] = dict_cond
             if verbose <= VERB['info']: 
@@ -637,6 +648,7 @@ def make_nipype_bunch(dict_regressors, other_reg,
     regressor_names = []
     regressors = []
     if other_reg:
+
         for key, val in other_reg.items():
             regressor_names.append(key)
             regressors.append(val['values'])
