@@ -474,29 +474,27 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     _check_keys_in({'Columns'}, model_dict)
     #
     regressors = model_dict['Columns']
-    dict_regressors = {} 
+    dict_regressors = collections.OrderedDict() 
     dict_other_regressors = collections.OrderedDict()
 
-    for kreg in regressors:
+    for kreg, this_regressor in regressors.items():
         logging[kreg] = {}
         logging[kreg]['is_well'] = True 
         logging[kreg]['msg'] = '' 
-        this_regressor = regressors[kreg]
-        dict_regressors[kreg] = {}
+        #dict_regressors[kreg] = {}
 
         # other regressors if we have a FileSelector
         if 'FileSelector' in this_regressor: 
+            # this kreg not in dict_regressors
             _check_keys_in({'pattern'}, this_regressor['FileSelector'])
             pattern = this_regressor['FileSelector']['pattern']
             file_name = _get_other_reg_file_name(base_dir, datafile, pattern)
             # print("the file_name: ", file_name)
-            other_regressors = _get_other_regressors(
-                                  file_name, this_regressor, kreg, verbose=verbose)
+            other_regressors = _get_other_regressors(file_name, \
+                                        this_regressor, kreg, verbose=verbose)
             dict_other_regressors.update(other_regressors)
-            # remove this kreg from dict_regressors
-            dict_regressors.pop(kreg, None)
            
-        else: #- this is a standard onset type of regressor, will be HRF convolved
+        else: #- this is a standard onset type of reg., will be HRF convolved
             _check_keys_in({'Variable', 'HRFModelling','Level'}, this_regressor)
 
             if verbose <= VERB['info']: 
@@ -515,12 +513,11 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             if nothing_there:
                 msg =  nothing_there + ' ! \n' + 'Removing key {} for {}'\
                                                     .format(kreg, datafile)
-                # remove this regressor in the returned dictionary
-                dict_regressors.pop(kreg, None)
                 if verbose <= VERB['info']: 
                     print(msg)
                 logging[kreg]['msg'] = msg
                 logging[kreg]['is_well'] = False
+                # skip this regressor in the returned dictionary
                 continue # skip that kreg
 
             # Second, get the values for these lines
@@ -564,7 +561,8 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             dict_cond['tmp_modulation'] = False
             if 'tmp_modulation' in this_regressor:
                 dict_cond['tmp_modulation'] = this_regressor['ModulationTime']
-            
+
+            # Adding the regressor  
             dict_regressors[kreg] = dict_cond
             if verbose <= VERB['info']: 
                 print('\nkeys for regressor ', kreg, " are:", dict_cond.keys())
