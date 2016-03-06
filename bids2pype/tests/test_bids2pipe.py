@@ -5,6 +5,10 @@ import os
 import os.path as osp
 import json
 
+#print("\n__name__ == ",__name__, "\n")
+print("\n__file__ == ",__file__, "\n")
+
+LEVELS = {'Run', 'Session', 'Subject', 'Group'}
 
 test_case_105a = {
     'base_dir': '/home/jb/data/bids/ds105',
@@ -96,7 +100,8 @@ def test_associate_model_data():
     datafile0 = sorted(data_dict.keys())[0]
     read_from_disk  = data_dict[datafile0]
     
-    expected_datafile = base_dir + '/sub-01/func/sub-01_task-mixedgamblestask_run-01_bold.nii.gz'
+    expected_datafile = base_dir + \
+                  '/sub-01/func/sub-01_task-mixedgamblestask_run-01_bold.nii.gz'
     assert datafile0 ==  expected_datafile
 
 
@@ -112,17 +117,19 @@ def test_associate_model_data():
 def test_get_nipype_specify_model_inputs(): 
 
     specifymodel_inputs, bunches, data = \
-        utils._get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='fsl', 
-                                                                     verbose=utils.VERB['none'])
+        utils._get_nipype_specify_model_inputs(base_dir, model_pattern, 
+                                bunch_type='fsl', verbose=utils.VERB['none'])
 
     sorted_bunch = [b for (d,b) in sorted(zip(data, bunches))]
     sorted_data = sorted(data)
 
-    expected_data0 = base_dir + '/sub-01/func/sub-01_task-mixedgamblestask_run-01_bold.nii.gz'
-    print(expected_data0)
+    expected_data0 = base_dir + \
+            '/sub-01/func/sub-01_task-mixedgamblestask_run-01_bold.nii.gz'
+    #print(expected_data0)
     assert expected_data0 == sorted_data[0]
     
-    exp_param_gain = np.loadtxt('./test_cond_amplitude.txt').astype(float)
+    exp_param_gain = np.loadtxt(\
+            './data/test_files/test_cond_amplitude.txt').astype(float)
     exp_param_gain -= exp_param_gain.mean()
     index_gain = sorted_bunch[0].conditions.index('param-gain')
     read_param_gain = np.asarray(sorted_bunch[0].amplitudes[index_gain])
@@ -130,8 +137,28 @@ def test_get_nipype_specify_model_inputs():
     assert np.linalg.norm(read_param_gain - exp_param_gain) < 1.e-12
     
 def test__get_dict_from_tsv_file():
-    pass
+    """
+    """
+    fn = './data/test_files/sub-01_task-mixedgamblestask_run-01_events.tsv'
+    dic = utils._get_dict_from_tsv_file(fn)
+    assert {'onset','duration','trial_type', 'distance from indifference',
+                            'RT','parametric gain'}.issubset(set(dic.keys()))
+    assert dic['onset'][1] == 4.0
+    assert len(dic['onset']) == 86 
+    assert dic['duration'][0] == 3
+    assert len(dic['duration']) == 86 
+    assert dic['RT'][1] == 1.793
 
+def test_get_json_dict():
+    """
+    """
+    json_fn = base_dir + '/models/ds-005_type-russ_sub-all_model.json'
+    # read json model
+    json_dic = utils.get_json_dict(json_fn, "Run")
+    assert json_dic['Level'] == "Run"
+    assert json_dic['DependentVariable'] == "task-mixedgamblestask"
+    assert "HighPassFilterCutoff" in json_dic.keys()
+    assert "Columns" in json_dic.keys()
 
 def test_get_other_regressors():
     """
@@ -172,7 +199,7 @@ def test_get_other_regressors():
     mvt_file = base_dir + \
         '/derivatives/mcflirt/par/_runcode_3/'+\
         '_subject_id_sub-01/sub-01_task-mixedgamblestask_run-03_bold_mcf.nii.gz.par'
-    print(mvt_file)
+    #print(mvt_file)
     mvt = np.loadtxt(mvt_file) 
 
 
