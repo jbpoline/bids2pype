@@ -207,6 +207,7 @@ def associate_model_data(base_dir, model_pattern, level='Run',
     
     return {'data_dict':current_dict, 'base_dir':base_dir}
 
+
 def data_for_regressor(tsv_dict, datatype, trial):
     """
     get the onsets or the duration (called datatype) for this trial
@@ -220,6 +221,7 @@ def data_for_regressor(tsv_dict, datatype, trial):
             for i,_trial in enumerate(tsv_dict['trial_type']) if _trial == trial]
 
     return trial_data
+
 
 def _check_keys_in(keys, somewhere):
     """
@@ -265,7 +267,7 @@ def _get_tsv_values(tsv_dict, column_name, lines_bool):
 
 
 def _run_has_event_file(datafile):
-    pass
+    assert False 
 
 def _get_event_filename_for_run(datafile):
     """
@@ -300,6 +302,14 @@ def _get_bids_variables(base_dir, datafile, check=False):
 
 def _get_file_from_pattern(base_dir, file_pattern, bvar_dict):
     """
+    Takes a file_pattern and a dict. The pattern will contain {[???]*} substrings,
+    and the dictionary contains predefined keys: 'run', 'ses', 'sub', 'grp' 
+    which values are strings corresponding to the "value" in the key-value
+    of a BIDS filename. 
+    This allows to format slighlty differently the values of the k-v pairs
+    and form the filename wanted.
+
+    
     input: 
     ------
     base_dir: string 
@@ -312,6 +322,9 @@ def _get_file_from_pattern(base_dir, file_pattern, bvar_dict):
     string
         the filename
     """
+
+
+
     # replicate dict but with int
     ivar_dict = {}
     for k in bvar_dict:
@@ -326,13 +339,13 @@ def _get_file_from_pattern(base_dir, file_pattern, bvar_dict):
     find_sre = compiled.findall(file_pattern)
     for substr in find_sre:
         # substr should be '{[run]:01d}', or '{[run]}'
-        if substr[-2] == 'd': 
+        if substr[-2] == 'd':
             newstr = substr.format(ivar_dict)
         else:
             newstr = substr.format(bvar_dict)
         file_pattern = file_pattern.replace(substr, newstr, 1) 
-        # print(substr, newstr, file_pattern)
-                                # 1: replace only first occurence
+                                            # 1: replace only first occurence
+        # debug: print(substr, newstr, file_pattern)
 
     return osp.join(base_dir, file_pattern)
 
@@ -483,7 +496,8 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
         logging[kreg]['msg'] = '' 
         #dict_regressors[kreg] = {}
 
-        # other regressors if we have a FileSelector
+        # other regressors if we have a FileSelector - not HRF convolved - 
+        # may contain several columns of data as in motion parameters
         if 'FileSelector' in this_regressor: 
             # this kreg not in dict_regressors
             _check_keys_in({'pattern'}, this_regressor['FileSelector'])
@@ -505,6 +519,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             dict_cond['HRF'] = this_regressor['HRFModelling']
 
             # First, get the lines through 'Variable' and 'Level':
+            #------------------------------------------------------
             trial_level = this_regressor['Level']
             explanatory = this_regressor['Variable']
             col_bool, nothing_there = _get_tsv_lines(tsv_dict, 
@@ -521,11 +536,13 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
                 continue # skip that kreg
 
             # Second, get the values for these lines
+            #------------------------------------------------------
             _check_keys_in({'onset', 'duration'}, tsv_dict)
             dict_cond['onset'] = _get_tsv_values(tsv_dict, 'onset', col_bool) 
 
             # if there is a "duration" key in the model for this regressor,
             # take it and overide values in tsv file
+            #------------------------------------------------------
             if "Duration" in this_regressor:
                 the_duration = this_regressor['Duration']
                 dict_cond['duration'] = \
@@ -536,6 +553,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
 
             # Any parametric modulation ? 'prm_modulation' corresponds 
             # to the 'weight'
+            #------------------------------------------------------
             if 'ModulationVar' in this_regressor:
                 weights = _get_tsv_values(tsv_dict, 
                                 this_regressor['ModulationVar'], col_bool)
@@ -550,7 +568,8 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
                     dict_cond['order_modulation'] = \
                                                 this_regressor['ModulationOrder']
 
-            #no parametric modulation
+            # No parametric modulation
+            #------------------------------------------------------
             else:
                 dict_cond['prm_modulation'] = \
                                         list(np.ones(col_bool.shape)[col_bool])
@@ -558,15 +577,18 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
                 dict_cond['order_modulation'] = None
 
             # Any temporal modulation ?
+            #------------------------------------------------------
             dict_cond['tmp_modulation'] = False
             if 'tmp_modulation' in this_regressor:
                 dict_cond['tmp_modulation'] = this_regressor['ModulationTime']
 
             # Adding the regressor  
+            #------------------------------------------------------
             dict_regressors[kreg] = dict_cond
             if verbose <= VERB['info']: 
                 print('\nkeys for regressor ', kreg, " are:", dict_cond.keys())
                 print('\ndict for regressor: ', dict_cond)
+
 
     return dict_regressors, dict_other_regressors, logging
 
@@ -688,7 +710,7 @@ def make_nipype_bunch(dict_regressors, other_reg,
 
 def _get_substr_between(thestring, after, before, check=True):
     """
-    find things that are after after and before before :)
+    find things that are strictly after after and strictly before before :)
     example: 
 
     >>> _get_substr_between('++aaa_the_good_stuff_bbb++', 'aaa', 'bbb')
