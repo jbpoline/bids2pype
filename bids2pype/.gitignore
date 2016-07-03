@@ -1,3 +1,4 @@
 tmp
 *.pyc
 .ipynb_checkpoints/
+tests/.cache

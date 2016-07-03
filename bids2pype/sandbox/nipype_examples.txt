@@ -1,0 +1,13 @@
+
+From Chris:
+I've analyzed my data a long while ago (ds114). The dictionaries for nipype are here: https://github.com/chrisfilo/2010-Reliability-Study/blob/51660a2b933d5e2912f266ce5aabe0c125a52e05/src/variables.py#L67, (the format is not exactly the same, but hopefully you can figure it out). Russ can comment on other datasets analyzed previously on TACC.
+
+From Russ:
+https://github.com/poldrack/fmri-handbook-2e-code/blob/py3/notebooks/DataPreparation/DataPreparation-ds005.ipynb
+
+From Satra
+our canned scripts are going to be uploaded here from now on:
+https://github.com/gablab/openfmri
+we are slowly moving over to all things BIDS and then eventually to all things NIDM. but we have had reasonable success with these things. one thing that's there is a basic group level model.
+there is a qa script as well that is presently an interactive notebook, but hope to redo it in the next few months.
+
