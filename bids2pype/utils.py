@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import collections
-import os 
+import os
 import os.path as osp
 import shutil
 import json
@@ -16,42 +16,43 @@ from nipype.interfaces.base import Bunch
 VERB  = {'none':10, 'info':3, 'warn':2, 'bug':1, 'critical':0}
 
 LEVELS = {'Run', 'Session', 'Subject', 'Group'}
-LEVELSJSON = {  'Run':'run_model', 'Session':'ses_model', 
+LEVELSJSON = {  'Run':'run_model', 'Session':'ses_model',
                 'Subject':'sub_model', 'Group':'group_model'}
 
 REGKEYS = ['Variable', 'Level', 'HRFModelling', 'ModulationOrder', 'ModulationVar', 'Demean']
-RUNMODKEYS = ['Level', 'DependentVariable', 'Columns', 'Error', 
+RUNMODKEYS = ['Level', 'DependentVariable', 'Columns', 'Error',
               'Contrasts', 'HighPassFilterCutoff']
 CONKEYS = ['Column', 'Statistic',  'Weights']
 
 DEFAULTS_PAR = {'order_modulation': 1, 'high_pass_filter_cutoff': 120}
 
-
 def _get_json_dict_from_file(json_file):
     """
     """
     assert osp.isfile(json_file), "{} is not a file".format(json_file)
-    try: 
+    try:
         with open(json_file) as fjson:
             json_dic = json.load(fjson)
     except: ValueError, " {} cannot be loaded by json module".format(json_file)
 
     return json_dic
 
+
 def _get_dict_from_tsv_file(tsv_file):
     """
     """
     assert osp.isfile(tsv_file), "{} is not a file ".format(tsv_file)
-    
+
     df = pd.read_csv(tsv_file, index_col=False, sep='\t')
     tsv_dict = df.to_dict(orient='list')
 
     return tsv_dict
 
+
 def get_json_dict(json_model_fn, level):
     """
     get the dict corresponding to this level from the json model file
-    
+
 
     parameters
     ----------
@@ -65,14 +66,14 @@ def get_json_dict(json_model_fn, level):
             contains the json file info
     """
 
-    try: 
+    try:
         with open(json_model_fn) as fjson:
             model_dic = json.load(fjson)
     except: ValueError,"\n json module cannot load {}".format(json_model_fn)
 
     json_level = LEVELSJSON[level]
 
-    # in this json file, get the level dictionary 
+    # in this json file, get the level dictionary
     if json_level in model_dic:
         assert model_dic[json_level]['Level'] == level, \
                     "{} not in {}".format(level, model_dic[json_level])
@@ -84,16 +85,17 @@ def get_json_dict(json_model_fn, level):
 
     return dict_level
 
+
 def get_json_model_Ydata(json_model_fn, level='Run', verbose=VERB['none']):
     """
     Reads a json model, then search in the base_dir to return the data
     or set of data to which the model should be applied
 
     """
-    
-    # json file like .../models/something.json, 
+
+    # json file like .../models/something.json,
     basedir_to_search = osp.dirname(osp.dirname(json_model_fn))
-    if verbose <= VERB['info']: 
+    if verbose <= VERB['info']:
         print('base dir', basedir_to_search)
         print('json_model_fn', json_model_fn)
 
@@ -108,8 +110,8 @@ def get_json_model_Ydata(json_model_fn, level='Run', verbose=VERB['none']):
 
 #    if level == 'Session':
 #        returned_list = get_sessions_data(basedir_to_search, dict_level)
-        
-    return returned_list 
+
+    return returned_list
 
 
 def get_prefix_suffix(level):
@@ -120,13 +122,14 @@ def get_prefix_suffix(level):
         nii_Y_prefix = 'sub-*'
         nii_Y_suffix = '_run-*.nii.gz'
     else:
-        raise NotImplementedError, " Level {} not implemented".format(level)
+        raise NotImplementedError(" Level {} not implemented".format(level))
 
     return nii_Y_prefix, nii_Y_suffix
 
+
 def get_runs_data(basedir, model_dic, verbose=VERB['none']):
     """
-    search for the runs specified in model_dic in this base directory 
+    search for the runs specified in model_dic in this base directory
     """
     data_key = 'DependentVariable'
     assert 'DependentVariable' in model_dic, \
@@ -163,31 +166,31 @@ def glob_recursive(source_dir, pattern):
 def _rglob_sorted_by_depth(base_dir, pattern):
     """
     recursively find files with pattern in base_dir
-    return a list of files found, from root to leaf 
+    return a list of files found, from root to leaf
     """
     def sort_by_dir_len(x):
         return(len(osp.dirname(x)))
-    
+
     filenames = glob_recursive(base_dir, pattern)
     # return the list of directory by order of most root to most leaf
 
     return sorted(filenames, key=sort_by_dir_len)
 
 
-def associate_model_data(base_dir, model_pattern, level='Run', 
+def associate_model_data(base_dir, model_pattern, level='Run',
                                                     verbose=VERB['none']):
     """
     This function creates the link between a given nii or nii.gz
     filename and the model that should be apply to it at the run level
-    
+
     parameters:
     -----------
     base_dir: string
         the base directory of the bids data
-    model_pattern: 
+    model_pattern:
         glob pattern to identify model files
 
-    output
+    returns
     ------
     dictionary
         Contains the link between nii files to be processed (keys)
@@ -196,15 +199,15 @@ def associate_model_data(base_dir, model_pattern, level='Run',
     all_jsons_sorted = _rglob_sorted_by_depth(base_dir, model_pattern)
     current_dict = {}
     for json_model_fn in all_jsons_sorted:
-        list_of_data = get_json_model_Ydata(json_model_fn, 
-                                                level=level, verbose=verbose)
         # this at the moment may return unwanted data : too liberal
+        list_of_data = get_json_model_Ydata(json_model_fn,
+                                                level=level, verbose=verbose)
         dict_level = get_json_dict(json_model_fn, level)
         for data in list_of_data:
             # only associate data and model for data which have an event file:
-            if _get_event_filename_for_run(data): 
+            if _get_event_filename_for_run(data):
                 current_dict[data] = dict_level
-    
+
     return {'data_dict':current_dict, 'base_dir':base_dir}
 
 
@@ -242,40 +245,42 @@ def _get_tsv_lines(tsv_dict, column_name, trial):
     column_data = np.asarray(tsv_dict[column_name])
     if trial == 'n/a':
         lines_bool =  np.ones(column_data.shape, dtype=bool)
-    else: 
-        lines_bool = column_data == trial 
+    else:
+        lines_bool = column_data == trial
 
-    # for the moment, fails if no trial of that type 
-    all_fine =  np.any(lines_bool) 
+    # for the moment, fails if no trial of that type
+    all_fine =  np.any(lines_bool)
     if not all_fine:
         message =  "\n{} column has no {}".format(column_name, trial)
 
     return lines_bool, message
 
+
 def _get_tsv_values(tsv_dict, column_name, lines_bool):
     """
-    Read the column_name from the tsv_dict, and select the values 
-    that are True for lines_bool 
+    Read the column_name from the tsv_dict, and select the values
+    that are True for lines_bool
     """
     assert column_name in tsv_dict,  \
                 "There is no {} in {}".format(column_name, tsv_dict.keys())
     col_array = np.asarray(tsv_dict[column_name])
     col_values = col_array[lines_bool]
     assert len(col_values) > 0, \
-            "no values for {}".format(column_name, tsv_dict.keys()) 
-    return list(col_values) 
+            "no values for {}".format(column_name, tsv_dict.keys())
+    return list(col_values)
 
 
 def _run_has_event_file(datafile):
-    assert False 
+    assert False
+
 
 def _get_event_filename_for_run(datafile):
     """
-    input: 
+    input:
     ------
     datafile: string
         a *_bold.nii.gz file
-    output: 
+    output:
     -------
     string
         corresponding filename
@@ -285,6 +290,7 @@ def _get_event_filename_for_run(datafile):
         return tsv_file
     else:
         return ''
+
 
 def _get_bids_variables(base_dir, datafile, check=False):
     """
@@ -303,21 +309,21 @@ def _get_bids_variables(base_dir, datafile, check=False):
 def _get_file_from_pattern(base_dir, file_pattern, bvar_dict):
     """
     Takes a file_pattern and a dict. The pattern will contain {[???]*} substrings,
-    and the dictionary contains predefined keys: 'run', 'ses', 'sub', 'grp' 
+    and the dictionary contains predefined keys: 'run', 'ses', 'sub', 'grp'
     which values are strings corresponding to the "value" in the key-value
-    of a BIDS filename. 
+    of a BIDS filename.
     This allows to format slighlty differently the values of the k-v pairs
     and form the filename wanted.
 
-    
-    input: 
+
+    input:
     ------
-    base_dir: string 
+    base_dir: string
     pattern: string
-    bvar_dict: dict 
+    bvar_dict: dict
         contains 'run', 'ses', 'sub', 'grp' keys
 
-    output: 
+    output:
     -------
     string
         the filename
@@ -332,9 +338,9 @@ def _get_file_from_pattern(base_dir, file_pattern, bvar_dict):
             ivar_dict[k] = int(bvar_dict[k])
 
     # print(ivar_dict)
-    
-    # find the {[???]*} indicating formatting 
-    sre = "(\{0\[.{3}\].*?})" 
+
+    # find the {[???]*} indicating formatting
+    sre = "(\{0\[.{3}\].*?})"
     compiled = re.compile(sre)
     find_sre = compiled.findall(file_pattern)
     for substr in find_sre:
@@ -343,7 +349,7 @@ def _get_file_from_pattern(base_dir, file_pattern, bvar_dict):
             newstr = substr.format(ivar_dict)
         else:
             newstr = substr.format(bvar_dict)
-        file_pattern = file_pattern.replace(substr, newstr, 1) 
+        file_pattern = file_pattern.replace(substr, newstr, 1)
                                             # 1: replace only first occurence
         # debug: print(substr, newstr, file_pattern)
 
@@ -358,6 +364,7 @@ def _get_other_reg_file_name(base_dir, datafile, pattern):
 
     return file_name
 
+
 def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
     """
     from a file that contains columns of values, construct an "other regressor"
@@ -370,11 +377,11 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
         the dict described in the json model file
         should have keys:
             "FileSelector" : how to get the file
-            "Regressors" : which columns are we taking from this file 
+            "Regressors" : which columns are we taking from this file
     kreg: string
         the regressor key (name), eg: motion-param
 
-    returns: 
+    returns:
     --------
     dict_regressors: dict
         keys: names of the other regressors
@@ -393,7 +400,7 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
         raise
     assert osp.isfile(file_name)
 
-    if verbose <= VERB['info']: 
+    if verbose <= VERB['info']:
         print("_get_other_regressors: file_name {}, regressor: {}".format(
                                                         file_name, regressor))
     # Read this file, account for one column file
@@ -414,35 +421,36 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
     assert "Regressors" in regressor
     to_add = regressor["Regressors"] # should be ["all", "deriv1"]
     # if to_add empty, for the moment raise
-    if not to_add: 
+    if not to_add:
         print("to_add empty, for the moment raise")
 
     # possible values
     assert set(to_add).issubset({'all', 'deriv1'}), "{}".format(set(to_add))
-    dict_regressors = collections.OrderedDict() 
+    dict_regressors = collections.OrderedDict()
 
     if "all" in to_add:
         # form names
         col_names = [kreg+"_{:02d}".format(i+1) for i in all_col_indices]
         for i, name in enumerate(col_names):
-            dict_regressors[name] = {} 
+            dict_regressors[name] = {}
             dict_regressors[name]['values'] =  motpars[:,i]
-            dict_regressors[name]['group'] = kreg 
+            dict_regressors[name]['group'] = kreg
 
-    if "deriv1" in to_add: 
+    if "deriv1" in to_add:
         col_names = [kreg+"_{:02d}_deriv".format(i+1) for i in all_col_indices]
         for i, name in enumerate(col_names):
             dict_regressors[name] = {}
             td = np.zeros(motpars.shape[0])
             td[1:] = motpars[1:,i] - motpars[:-1,i]
-            dict_regressors[name]['values'] = td 
+            dict_regressors[name]['values'] = td
             dict_regressors[name]['group'] = kreg+"_deriv"
 
     return dict_regressors
 
+
 def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     """
-    returns conditions_names, and a list of 
+    returns conditions_names, and a list of
     dictionaries (one per condition/trial) containing
     onsets, duration, HRF, ... for this model
 
@@ -458,18 +466,18 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     returns
     -------
     dict_regressors: dict
-        keys are the name of the regressors, 
+        keys are the name of the regressors,
         values are dict containing onsets, duration, HRFModelling, etc
     dict_other_regressors: dict
         keys are name of other regressors (not to be convolved)
-        values are dict with 'values', and possibly other information 
+        values are dict with 'values', and possibly other information
     logging:
 
     """
 
     # proper logging for latter ...
     logging = {}
-   
+
     # for runs, the datafile is just a filename
     # check data exist ?
     assert osp.isfile(datafile), "{} is not a file".format(datafile)
@@ -487,18 +495,18 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     _check_keys_in({'Columns'}, model_dict)
     #
     regressors = model_dict['Columns']
-    dict_regressors = collections.OrderedDict() 
+    dict_regressors = collections.OrderedDict()
     dict_other_regressors = collections.OrderedDict()
 
     for kreg, this_regressor in regressors.items():
         logging[kreg] = {}
-        logging[kreg]['is_well'] = True 
-        logging[kreg]['msg'] = '' 
+        logging[kreg]['is_well'] = True
+        logging[kreg]['msg'] = ''
         #dict_regressors[kreg] = {}
 
-        # other regressors if we have a FileSelector - not HRF convolved - 
+        # other regressors if we have a FileSelector - not HRF convolved -
         # may contain several columns of data as in motion parameters
-        if 'FileSelector' in this_regressor: 
+        if 'FileSelector' in this_regressor:
             # this kreg not in dict_regressors
             _check_keys_in({'pattern'}, this_regressor['FileSelector'])
             pattern = this_regressor['FileSelector']['pattern']
@@ -507,12 +515,12 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             other_regressors = _get_other_regressors(file_name, \
                                         this_regressor, kreg, verbose=verbose)
             dict_other_regressors.update(other_regressors)
-           
+
         else: #- this is a standard onset type of reg., will be HRF convolved
             _check_keys_in({'Variable', 'HRFModelling','Level'}, this_regressor)
 
-            if verbose <= VERB['info']: 
-                print('\nRegress :', kreg, 
+            if verbose <= VERB['info']:
+                print('\nRegress :', kreg,
                       'regressor[Variable]: ', regressor['Variable'])
 
             dict_cond = {}
@@ -522,13 +530,13 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             #------------------------------------------------------
             trial_level = this_regressor['Level']
             explanatory = this_regressor['Variable']
-            col_bool, nothing_there = _get_tsv_lines(tsv_dict, 
+            col_bool, nothing_there = _get_tsv_lines(tsv_dict,
                                                      explanatory, trial_level)
 
             if nothing_there:
                 msg =  nothing_there + ' ! \n' + 'Removing key {} for {}'\
                                                     .format(kreg, datafile)
-                if verbose <= VERB['info']: 
+                if verbose <= VERB['info']:
                     print(msg)
                 logging[kreg]['msg'] = msg
                 logging[kreg]['is_well'] = False
@@ -538,7 +546,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             # Second, get the values for these lines
             #------------------------------------------------------
             _check_keys_in({'onset', 'duration'}, tsv_dict)
-            dict_cond['onset'] = _get_tsv_values(tsv_dict, 'onset', col_bool) 
+            dict_cond['onset'] = _get_tsv_values(tsv_dict, 'onset', col_bool)
 
             # if there is a "duration" key in the model for this regressor,
             # take it and overide values in tsv file
@@ -549,13 +557,13 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
                            list((np.ones(col_bool.shape)*the_duration)[col_bool])
             else:
                 dict_cond['duration'] = \
-                                _get_tsv_values(tsv_dict, 'duration', col_bool) 
+                                _get_tsv_values(tsv_dict, 'duration', col_bool)
 
-            # Any parametric modulation ? 'prm_modulation' corresponds 
+            # Any parametric modulation ? 'prm_modulation' corresponds
             # to the 'weight'
             #------------------------------------------------------
             if 'ModulationVar' in this_regressor:
-                weights = _get_tsv_values(tsv_dict, 
+                weights = _get_tsv_values(tsv_dict,
                                 this_regressor['ModulationVar'], col_bool)
                 if 'Demean' in this_regressor:
                     weights = np.asarray(weights).astype(float)
@@ -582,10 +590,10 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
             if 'tmp_modulation' in this_regressor:
                 dict_cond['tmp_modulation'] = this_regressor['ModulationTime']
 
-            # Adding the regressor  
+            # Adding the regressor
             #------------------------------------------------------
             dict_regressors[kreg] = dict_cond
-            if verbose <= VERB['info']: 
+            if verbose <= VERB['info']:
                 print('\nkeys for regressor ', kreg, " are:", dict_cond.keys())
                 print('\ndict for regressor: ', dict_cond)
 
@@ -603,26 +611,26 @@ def get_run_contrasts(model_dict):
     returns
     -------
     dict_contrasts: dict
-        a dict containing all necessary information for the 
+        a dict containing all necessary information for the
         contrasts to be exported
     """
 
     _check_keys_in({'Contrasts'}, model_dict)
-    regressors = model_dict['Columns'] 
+    regressors = model_dict['Columns']
     contrast_dict = model_dict['Contrasts']
-    dict_contrasts = {} 
+    dict_contrasts = {}
 
     for con_name,val in contrast_dict.iteritems():
         # fill contrast dict
         contrast =  {}
         contrast['name'] = con_name
-        contrast['conditions'] = val['Columns'] 
+        contrast['conditions'] = val['Columns']
         # check contrast conditions are in regressors
         assert set(contrast['conditions']).issubset(set(regressors.keys())),\
                 "{} not subset of {}".format(
                                     contrast['conditions'], regressors.keys())
         contrast['Weights'] = val['Weights']
-        contrast['Statistic'] = val['Statistic'] 
+        contrast['Statistic'] = val['Statistic']
 
         #- add to dict_contrasts
         dict_contrasts[con_name] = contrast
@@ -634,10 +642,10 @@ def get_run_contrasts(model_dict):
 #------------------------------------------------------------------------------#
 
 
-def make_nipype_bunch(dict_regressors, other_reg, 
+def make_nipype_bunch(dict_regressors, other_reg,
                                        bunch_type='spm', verbose=VERB['none']):
     """
-    return a Bunch : the nipype input for model specification  
+    return a Bunch : the nipype input for model specification
     so far : the spm bunch with pmod and tmod
     """
 
@@ -652,9 +660,9 @@ def make_nipype_bunch(dict_regressors, other_reg,
     pmod = []
 
     # condition_names = dict_regressors.keys()
-    # mend the order of things condition names 
+    # mend the order of things condition names
 
-    for cond, dic in dict_regressors.items(): 
+    for cond, dic in dict_regressors.items():
         # dic = dict_regressors[cond]
         assert type(dic) == dict, "{} not a dict".format(dic)
         if verbose <= VERB['info']:
@@ -669,14 +677,14 @@ def make_nipype_bunch(dict_regressors, other_reg,
                 pmod_name = dic['name_modulation']
                 pmod_poly = dic['order_modulation']
                 pmod_param = dic['prm_modulation']
-                pmod.append([Bunch(name=pmod_name, 
-                                   poly=pmod_poly, 
+                pmod.append([Bunch(name=pmod_name,
+                                   poly=pmod_poly,
                                    param=pmod_param), None])
             else:
                 pmod.append([])
         #----- fsl type of bunches ------#
         elif bunch_type == 'fsl':
-            # here the parametric modulation values encodes the 
+            # here the parametric modulation values encodes the
             # 'weights' or 'amplitudes'
             amplitudes.append(dic['prm_modulation'])
         else:
@@ -692,26 +700,27 @@ def make_nipype_bunch(dict_regressors, other_reg,
             regressors.append(val['values'])
 
     if bunch_type == 'spm': # pmod - tmod ?
-        return Bunch(conditions=conditions, 
-                     onsets=onsets, 
-                     durations=durations, 
+        return Bunch(conditions=conditions,
+                     onsets=onsets,
+                     durations=durations,
                      pmod=pmod,
-                     regressor_names=regressor_names, 
+                     regressor_names=regressor_names,
                      regressors=regressors
                      )
     elif bunch_type == 'fsl':
-        return Bunch(conditions=conditions, 
-                     onsets=onsets, 
+        return Bunch(conditions=conditions,
+                     onsets=onsets,
                      durations=durations,
                      amplitudes=amplitudes,
-                     regressor_names=regressor_names, 
+                     regressor_names=regressor_names,
                      regressors=regressors
                      )
+
 
 def _get_substr_between(thestring, after, before, check=True):
     """
     find things that are strictly after after and strictly before before :)
-    example: 
+    example:
 
     >>> _get_substr_between('++aaa_the_good_stuff_bbb++', 'aaa', 'bbb')
     '_the_good_stuff_'
@@ -726,12 +735,13 @@ def _get_substr_between(thestring, after, before, check=True):
     # get what's after
     whatisafter = thestring.split(after)[-1]
     # get what's before
-    between = whatisafter.split(before)[0] 
+    between = whatisafter.split(before)[0]
     return between
+
 
 def _get_task_json_dict(base_dir, datafile):
     """
-    get the task-???_bold.json dictionary corresponding to the datafile  
+    get the task-???_bold.json dictionary corresponding to the datafile
     These contain repetition time and task name
     """
     # get the task-X _bold.json
@@ -740,8 +750,8 @@ def _get_task_json_dict(base_dir, datafile):
     # should replace the top level one
     # here problematic when files ._* exist
     task_parameter_files = \
-                _rglob_sorted_by_depth(base_dir, 'task-'+taskname+'_bold.json')   
-    
+                _rglob_sorted_by_depth(base_dir, 'task-'+taskname+'_bold.json')
+
     # should be only one file:
     if len(task_parameter_files) != 1:
         raise NotImplementedError, \
@@ -752,6 +762,7 @@ def _get_task_json_dict(base_dir, datafile):
 
     return task_dict
 
+
 def _get_nipype_contrasts(model_dict):
     """
 
@@ -761,7 +772,7 @@ def _get_nipype_contrasts(model_dict):
         The dict corresponding to the json model file
     """
     contrasts_dict = get_run_contrasts(model_dict)
-    # format for nipype 
+    # format for nipype
     list_con = []
     for con,val in contrasts_dict.iteritems():
         this_con = (con, val['Statistic'], val['conditions'], val['Weights'])
@@ -769,11 +780,12 @@ def _get_nipype_contrasts(model_dict):
 
     return list_con
 
-def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm', 
-                                               level='Run', verbose=VERB['none']): 
+
+def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
+                                               level='Run', verbose=VERB['none']):
     """
     returns information ready for nipype specify_model:
-    For spm: returns pmod style of bunch 
+    For spm: returns pmod style of bunch
 
     parameters:
     -----------
@@ -782,19 +794,19 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
         a glob would give you the models
     bunch_type: string
         one of {'spm', 'fsl'}
-    
+
     returns
     -------
-    inputs_dict: dict 
+    inputs_dict: dict
         dict keys are:
         'time_repetition'
         'input_units'
         'high_pas_filter_cutoff'
     bunches: list
         list of Bunch object
-        These objects contain the onsets, duration, 
-                                    fsl: amplitudes, 
-                                    spm: pmod / tmod Bunches  
+        These objects contain the onsets, duration,
+                                    fsl: amplitudes,
+                                    spm: pmod / tmod Bunches
     datafiles:
         the list of nii.gz files (as many as bunches)
 
@@ -802,7 +814,7 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
 
     assert level=='Run', "level {} not implemented".format(level)
 
-    association_dict = associate_model_data(base_dir, model_pattern, 
+    association_dict = associate_model_data(base_dir, model_pattern,
                                             level=level, verbose=verbose)
     data_n_models = association_dict['data_dict']
     datafiles = data_n_models.keys()
@@ -837,14 +849,14 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
         bunches.append(make_nipype_bunch(dict_regressors, other_reg,
                                          bunch_type=bunch_type, verbose=verbose))
 
-    # bunches here is the "info" in Russ' ds005 notebook 
+    # bunches here is the "info" in Russ' ds005 notebook
     return inputs_dict, bunches, datafiles
 
 # specify_model = pe.Node(interface=model.SpecifyModel(), name="specify_model")
 # specify_model.inputs.input_units             = 'secs'
 # specify_model.inputs.time_repetition         = 3.
 # specify_model.inputs.high_pass_filter_cutoff = 120
-# specify_model.inputs.subject_info = 
+# specify_model.inputs.subject_info =
 
 
 def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
@@ -860,7 +872,7 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
         where it is copied
     list_pattern: list
         will only actually copy these patterns (strings)
-    
+
     """
     def _mkdir(_dir):
         if not osp.isdir(_dir):
@@ -897,18 +909,18 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
                     _touch(osp.join(newpath, _file))
 
 
-""" Notes ---- 
+""" Notes ----
 
 1- associate data and model.
     - find most top level model (or just one model)
     - instanciate default model_dict
     - get list of data
         * for runs, get the nii.gz
-        * for ses, sub, grp : 
+        * for ses, sub, grp :
             find all ses, sub, or grp directories, create a unique key for each
             for each, find data as list of files
             associate key and list of files
-    - once list of data is found, with a top level model, for each of these element go down 
+    - once list of data is found, with a top level model, for each of these element go down
         the directory tree and update the model if necessary
 
     ASSOCIATION OF DATA AND MODEL SHOULD BE COMPLEMENTED BY state_dict{'run','ses','sub','grp'}
@@ -918,9 +930,9 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
         this would be one object per set of data
         To be implementated
         -----------------------------
-            X demean 
-            X get movement parameter regressors 
-            - 
+            X demean
+            X get movement parameter regressors
+            -
 
 3. Take this internal data structure and export it in spm / fsl like type of nipype inputs
 
@@ -941,7 +953,7 @@ Outstanding question for Satra/Chris
 #     """
 #     dict_regressors = get_run_conditions(datafile, model_dict, verbose=verbose)
 #     condition_names = dict_regressors.keys()
-# 
+#
 #     nipype_run_info = {}
 #     nipype_run_info['condition_names'] = condition_names
 #     nipype_run_info['onsets'] = [dict_regressors[cond]['onset'] for cond in condition_names]
@@ -951,5 +963,5 @@ Outstanding question for Satra/Chris
 #     nipype_run_info['tmp_modulation'] = \
 #                 [dict_regressors[cond]['tmp_modulation'] for cond in condition_names]
 #     nipype_run_info['HRF'] = [dict_regressors[cond]['HRF'] for cond in condition_names]
-# 
+#
 #     return nipype_run_info
