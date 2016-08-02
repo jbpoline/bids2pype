@@ -33,7 +33,8 @@ def _get_json_dict_from_file(json_file):
     try:
         with open(json_file) as fjson:
             json_dic = json.load(fjson)
-    except: ValueError, " {} cannot be loaded by json module".format(json_file)
+    except:
+        raise ValueError(" {} cannot be loaded by json module".format(json_file))
 
     return json_dic
 
@@ -69,7 +70,8 @@ def get_json_dict(json_model_fn, level):
     try:
         with open(json_model_fn) as fjson:
             model_dic = json.load(fjson)
-    except: ValueError,"\n json module cannot load {}".format(json_model_fn)
+    except:
+        raise ValueError("\n json module cannot load {}".format(json_model_fn))
 
     json_level = LEVELSJSON[level]
 
@@ -105,8 +107,7 @@ def get_json_model_Ydata(json_model_fn, level='Run', verbose=VERB['none']):
         returned_list = get_runs_data(basedir_to_search, dict_level)
 
     else:
-        print("Level {} not yet implemented".format(level))
-        raise NotImplementedError
+        raise NotImplementedError("Level {} not yet implemented".format(level))
 
 #    if level == 'Session':
 #        returned_list = get_sessions_data(basedir_to_search, dict_level)
@@ -146,7 +147,7 @@ def _possible_dirpath_for_Ydata(dirname):
     """
     return True if this path can contain data
     """
-    raise NotImplementedError
+    raise NotImplementedError('_possible_dirpath_for_Ydata is not yet implemented')
     #return True
 
 
@@ -396,8 +397,8 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
     # pattern = regressor['FileSelector']['pattern']
     #- check that the file exists
     if not file_name:
-        print("{} not a file, regressor: {} ".format(file_name, regressor))
-        raise
+        raise Exception("{} not a file, regressor: {} ".format(file_name, regressor))
+
     assert osp.isfile(file_name)
 
     if verbose <= VERB['info']:
@@ -410,9 +411,8 @@ def _get_other_regressors(file_name, regressor, kreg, verbose=VERB['none']):
     elif motpars.ndim == 2:
         nb_lines, nb_col = motpars.shape
     else:
-        print(" array from {} does not seem to be well, motpars.shape".format(
+        raise Exception(" array from {} does not seem to be well, motpars.shape".format(
                                                       file_name, motpars.shape))
-        raise
     # debug:print("nb_col, nb_lines", nb_col, nb_lines)
 
     all_col_indices = range(nb_col)
@@ -485,8 +485,7 @@ def get_run_conditions(base_dir, datafile, model_dict, verbose=VERB['none']):
     # get tsv filename:
     tsv_file = _get_event_filename_for_run(datafile)
     if not tsv_file:
-        print("no tsv_file for {}".format(datafile))
-        raise
+        raise Exception("no tsv_file for {}".format(datafile))
     tsv_dict = _get_dict_from_tsv_file(tsv_file)
 
     # get condition names:
@@ -620,7 +619,7 @@ def get_run_contrasts(model_dict):
     contrast_dict = model_dict['Contrasts']
     dict_contrasts = {}
 
-    for con_name,val in contrast_dict.iteritems():
+    for con_name,val in contrast_dict.items():
         # fill contrast dict
         contrast =  {}
         contrast['name'] = con_name
@@ -688,8 +687,7 @@ def make_nipype_bunch(dict_regressors, other_reg,
             # 'weights' or 'amplitudes'
             amplitudes.append(dic['prm_modulation'])
         else:
-            print("unknown bunch type {}".format(bunch_type))
-            raise
+            raise Exception("unknown bunch type {}".format(bunch_type))
 
     regressor_names = []
     regressors = []
@@ -754,9 +752,9 @@ def _get_task_json_dict(base_dir, datafile):
 
     # should be only one file:
     if len(task_parameter_files) != 1:
-        raise NotImplementedError, \
+        raise NotImplementedError(
             "found  {},  len != 1 not implemented, taskname {} basedir {} ".\
-               format(task_parameter_files, taskname, base_dir)
+               format(task_parameter_files, taskname, base_dir))
 
     task_dict = _get_json_dict_from_file(task_parameter_files[0])
 
@@ -774,7 +772,7 @@ def _get_nipype_contrasts(model_dict):
     contrasts_dict = get_run_contrasts(model_dict)
     # format for nipype
     list_con = []
-    for con,val in contrasts_dict.iteritems():
+    for con,val in contrasts_dict.items():
         this_con = (con, val['Statistic'], val['conditions'], val['Weights'])
         list_con.append(this_con)
 
@@ -817,7 +815,7 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
     association_dict = associate_model_data(base_dir, model_pattern,
                                             level=level, verbose=verbose)
     data_n_models = association_dict['data_dict']
-    datafiles = data_n_models.keys()
+    datafiles = list(data_n_models.keys())
 
     #------ params supposed to be unique across models: take the first one ---#
 
@@ -838,7 +836,7 @@ def _get_nipype_specify_model_inputs(base_dir, model_pattern, bunch_type='spm',
 
     # create a list of bunches, one per datafile
     bunches = []
-    for datafile, model_dict in data_n_models.iteritems():
+    for datafile, model_dict in data_n_models.items():
         #task_dict = _get_task_json_dict(base_dir, datafile)
         dict_regressors, other_reg, _log = get_run_conditions(base_dir,
                                                         datafile, model_dict,
@@ -879,16 +877,15 @@ def create_empty_bids(source_dir, dest_dir, list_pattern, verbose=VERB['none']):
             try:
                 os.makedirs(_dir)
             except:
-                 print("cannot create directory {}".format(_dir))
-                 raise
+                 raise Exception("cannot create directory {}".format(_dir))
 
     def _touch(fname, times=None):
         try:
             with open(fname, 'a'):
                 os.utime(fname, times)
         except:
-            print(fname)
-            raise
+            raise Exception(print(fname))
+
 
     assert osp.isdir(source_dir), \
             '{} does not seem to be a directory'.format(source_dir)
